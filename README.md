@@ -26,10 +26,32 @@ Framework de automatización de pruebas Front-end impulsado por **Serenity/JS**,
 3. Configura las variables de entorno:
    ```bash
    cp .env.example .env
-   # Edita .env con tu OPENAI_API_KEY si usas las funciones de AI
+   # Edita .env con tu configuración de IA
+   
+   # Para usar OpenAI (default):
+   # AI_PROVIDER=openai
+   # OPENAI_API_KEY=sk-...
+
+   # Para usar Ollama (gratis):
+   # AI_PROVIDER=ollama
+   # OLLAMA_BASE_URL=http://localhost:11434  (opcional, por defecto es este)
+   # AI_MODEL=llama3                         (opcional, por defecto es llama3)
    ```
 
-## ▶️ Ejecución de Pruebas
+## 🤖 Generación de Pruebas con AI (Beta)
+
+El generador soporta múltiples proveedores. Asegúrate de configurar `.env` correctamente.
+
+```bash
+# Generar usando el proveedor configurado en .env
+npx ts-node src/ai/generator.ts "Usuario busca un producto" search.spec.ts
+```
+
+### Proveedores Soportados
+
+1. **OpenAI**: Requiere `OPENAI_API_KEY`.
+2. **Ollama**: Requiere tener Ollama corriendo localmente (`ollama serve`). Ideal para modelos gratuitos como Llama 3 o Mistral.
+
 
 Ejecutar todos los tests:
 ```bash

@@ -1,13 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { AIProvider } from '../infrastructure/AIProvider';
 import { OpenAIClient } from '../infrastructure/OpenAIClient';
 import { ScreenplaySystemPrompt } from '../prompts/ScreenplaySystemPrompt';
 
 export class CodeGenerator {
-    private aiClient: OpenAIClient;
+    private aiClient: AIProvider;
 
-    constructor() {
-        this.aiClient = new OpenAIClient();
+    constructor(provider: AIProvider) {
+        this.aiClient = provider;
     }
 
     async generateTestSpecs(scenarioDescription: string, outputFilename: string): Promise<string> {

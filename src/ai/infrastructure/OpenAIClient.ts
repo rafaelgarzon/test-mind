@@ -1,8 +1,9 @@
 import OpenAI from 'openai';
 import * as dotenv from 'dotenv';
+import { AIProvider } from './AIProvider';
 dotenv.config();
 
-export class OpenAIClient {
+export class OpenAIClient implements AIProvider {
     private client: OpenAI;
     private model: string;
 
