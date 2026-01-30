@@ -1,0 +1,9 @@
+node_modules
+test-results
+playwright-report
+.env
+.DS_Store
+dist
+coverage
+.idea
+.vscode
