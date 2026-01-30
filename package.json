@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npx playwright test",
+    "test:ui": "npx playwright test --ui",
+    "test:debug": "npx playwright test --debug",
+    "report": "npx playwright show-report",
+    "ai:gen": "npx ts-node src/ai/generator.ts",
+    "clean": "rm -rf test-results playwright-report"
   },
   "keywords": [],
   "author": "",
