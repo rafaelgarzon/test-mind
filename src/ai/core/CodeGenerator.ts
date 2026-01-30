@@ -12,15 +12,36 @@ export class CodeGenerator {
     }
 
     async generateTestSpecs(scenarioDescription: string, outputFilename: string): Promise<string> {
-        console.log(`Generating test for: ${scenarioDescription}`);
+        console.log(`Generating Cucumber test for: ${scenarioDescription}`);
 
-        const code = await this.aiClient.generate(ScreenplaySystemPrompt, scenarioDescription);
+        const resultRaw = await this.aiClient.generate(ScreenplaySystemPrompt, scenarioDescription);
 
-        const outputPath = path.resolve(process.cwd(), 'src/screenplay/specs', outputFilename);
-        this.writeToFile(outputPath, code);
+        let resultJson;
+        try {
+            // cleaner fallback for simple markdown cleanup
+            const cleanJson = resultRaw.replace(/```json/g, '').replace(/```/g, '').trim();
+            resultJson = JSON.parse(cleanJson);
+        } catch (e) {
+            console.error("Failed to parse AI response as JSON", resultRaw);
+            throw new Error("AI response was not valid JSON");
+        }
 
-        console.log(`Test generated at: ${outputPath}`);
-        return outputPath;
+        // ensure dirs exist
+        const featuresDir = path.resolve(process.cwd(), 'features');
+        const stepsDir = path.resolve(process.cwd(), 'features/step_definitions');
+
+        if (!fs.existsSync(featuresDir)) fs.mkdirSync(featuresDir, { recursive: true });
+        if (!fs.existsSync(stepsDir)) fs.mkdirSync(stepsDir, { recursive: true });
+
+        const featurePath = path.resolve(featuresDir, resultJson.featureFilename);
+        const stepsPath = path.resolve(stepsDir, resultJson.stepsFilename);
+
+        this.writeToFile(featurePath, resultJson.feature);
+        this.writeToFile(stepsPath, resultJson.steps);
+
+        console.log(`Feature generated at: ${featurePath}`);
+        console.log(`Steps generated at: ${stepsPath}`);
+        return featurePath;
     }
 
     private writeToFile(filePath: string, content: string): void {

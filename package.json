@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "npx playwright test",
+    "test": "npx cucumber-js",
     "test:ui": "npx playwright test --ui",
     "test:debug": "npx playwright test --debug",
     "report": "npx playwright show-report",
@@ -27,7 +27,10 @@
     "playwright": "^1.58.0"
   },
   "devDependencies": {
+    "@cucumber/cucumber": "^12.6.0",
     "@playwright/test": "^1.58.0",
-    "@types/node": "^25.1.0"
+    "@serenity-js/cucumber": "^3.38.0",
+    "@types/node": "^25.1.0",
+    "ts-node": "^10.9.2"
   }
 }
