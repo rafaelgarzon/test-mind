@@ -16,7 +16,7 @@ test('Login Scenario: Successful Login', async ({ page }) => {
 
     await actor.attemptsTo(
         Navigate.to('https://the-internet.herokuapp.com/login'),
-        Login.as('tomsmith'),
+        Login.withCredentials('tomsmith', 'SuperSecretPassword!'),
         Ensure.that(LoginUI.flashMessage.text(), includes('You logged into a secure area!')),
     );
 });
