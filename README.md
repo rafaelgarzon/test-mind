@@ -67,10 +67,12 @@ npx cucumber-js features/login.feature
 ```
 
 
-Ver el reporte HTML:
+Ver el reporte HTML (Serenity BDD):
+*(Requiere Java instalado)*
 ```bash
-npx playwright show-report
+npm run report
 ```
+El reporte se generará en: `target/site/serenity/index.html`
 
 ## 📂 Estructura del Proyecto
 
@@ -87,10 +89,4 @@ src/screenplay/
 
 ```
 
-## 🤖 Generación de Pruebas con AI (Beta)
 
-Puedes usar el generador de pruebas para crear esqueletos de tests:
-
-```bash
-npx ts-node src/ai/generator.ts "Usuario se loguea con credenciales validas" login_ai.spec.ts
-```
