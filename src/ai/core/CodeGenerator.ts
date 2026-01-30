@@ -1,17 +1,27 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { AIProvider } from '../infrastructure/AIProvider';
-import { OpenAIClient } from '../infrastructure/OpenAIClient';
 import { ScreenplaySystemPrompt } from '../prompts/ScreenplaySystemPrompt';
+import { DuplicateDetector } from './DuplicateDetector';
 
 export class CodeGenerator {
     private aiClient: AIProvider;
+    private duplicateDetector: DuplicateDetector;
 
     constructor(provider: AIProvider) {
         this.aiClient = provider;
+        this.duplicateDetector = new DuplicateDetector(provider);
     }
 
     async generateTestSpecs(scenarioDescription: string, outputFilename: string): Promise<string> {
+        // 1. Check for duplicates
+        const duplicateResult = await this.duplicateDetector.checkForDuplicates(scenarioDescription);
+        if (duplicateResult.isDuplicate) {
+            const msg = `\n🚫 DUPLICATE DETECTED!\nThis scenario seems similar to: ${duplicateResult.existingFile}\nReason: ${duplicateResult.reason}\n\nOperation Aborted to prevent redundancy.`;
+            console.error(msg);
+            throw new Error(msg);
+        }
+
         console.log(`Generating Cucumber test for: ${scenarioDescription}`);
 
         const resultRaw = await this.aiClient.generate(ScreenplaySystemPrompt, scenarioDescription);
