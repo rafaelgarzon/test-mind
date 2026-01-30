@@ -1,36 +1,47 @@
-# 🛠️ Guía Técnica y Arquitectura
+# 🛠️ Guía Técnica y Arquitectura (BDD)
 
-Documentación para desarrolladores y QA Automation Engineers.
+Documentación para desarrolladores sobre la implementación TDD/BDD con Serenity/JS y Cucumber.
 
-## Arquitectura
+## Stack Tecnológico
+- **Cucumber (Gherkin)**: Definición de escenarios.
+- **Serenity/JS**: Orquestación del Screenplay Pattern.
+- **Playwright**: Motor de automatización del navegador.
 
-El proyecto sigue el **Patrón Screenplay** implementado con [Serenity/JS](https://serenity-js.org/).
+## Arquitectura Screenplay + BDD
 
-### Principios SOLID
-- **Single Responsibility (SRP)**: Cada archivo tiene un propósito único.
-  - `Tasks/`: Solo contienen lógica de negocio (el "Qué").
-  - `UI/`: Solo mapean selectores (el "Dónde").
-  - `Actors/`: Solo definen quién interactúa.
-- **Open/Closed (OCP)**: Extendemos funcionalidades creando nuevas Tasks/Abilities sin modificar las existentes.
+### Capas del Proyecto
 
-### Estructura de Directorios
-- `src/screenplay/tasks`: Acciones de alto nivel (ej. `Login`, `AddToCart`).
-- `src/screenplay/ui`: Mapeo de Page Elements.
-- `src/ai`: Módulo de generación de código (Arquitectura modular).
+1.  **Capa de Negocio (Gherkin)**
+    - Ubicación: `features/*.feature`
+    - Responsabilidad: Definir el *comportamiento* esperado en lenguaje natural.
+
+2.  **Capa de Pegamento (Glue Code)**
+    - Ubicación: `features/step_definitions/*.steps.ts`
+    - Responsabilidad: Traducir las líneas de Gherkin a tareas de Screenplay.
+    - Ejemplo:
+      ```typescript
+      Given('que el usuario ingresa', () => actorCalled('Ben').attemptsTo(Login...));
+      ```
+
+3.  **Capa de Tareas (Screenplay Tasks)**
+    - Ubicación: `src/screenplay/tasks/`
+    - Responsabilidad: Agrupar interacciones de bajo nivel en acciones de negocio.
+
+4.  **Capa de UI**
+    - Ubicación: `src/screenplay/ui/`
+    - Responsabilidad: Mapeo de selectores (Page Elements).
 
 ## Workflow de Desarrollo
 
-1. **Crear UI Mappings**: Antes de la lógica, define los elementos en `src/screenplay/ui`.
-2. **Crear Tasks**: Compón interacciones simples (`Click`, `Enter`) en tareas de negocio.
-3. **Crear Specs**: Escribe el test invocando al Actor y sus tareas.
+1.  **Escribir Feature**: Define el escenario en `features/nuevo.feature` (o usa la IA para generarlo).
+2.  **Definir Pasos**: Crea `features/step_definitions/nuevo.steps.ts`.
+3.  **Implementar Tasks**: Si el paso requiere una acción nueva, impléméntala en `src/screenplay/tasks`.
+4.  **Ejecutar**: `npm test`.
 
-### Configuración de IA
-El módulo de IA soporta múltiples proveedores (OpenAI, Ollama).
-Configura `.env`:
-```env
-AI_PROVIDER=ollama   # o 'openai'
-AI_MODEL=llama3      # modelo específico
+## Debugging
+
+Para depurar los tests de Cucumber:
+```bash
+# (Requiere configuración adicional de debug en VSCode para node)
 ```
-
-## CI/CD
-El proyecto incluye workflows de Github Actions en `.github/workflows`.
+Por ahora, usa `console.log` o el reporte de Serenity para trazar errores.

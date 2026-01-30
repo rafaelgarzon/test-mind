@@ -44,8 +44,11 @@ El generador soporta múltiples proveedores. Asegúrate de configurar `.env` cor
 
 ```bash
 # Generar usando el proveedor configurado en .env
-npx ts-node src/ai/generator.ts "Usuario busca un producto" search.spec.ts
+```bash
+# El generador creará un archivo .feature y su steps.ts correspondiente
+npx ts-node src/ai/generator.ts "Usuario busca un producto" search
 ```
+
 
 ### Proveedores Soportados
 
@@ -53,15 +56,16 @@ npx ts-node src/ai/generator.ts "Usuario busca un producto" search.spec.ts
 2. **Ollama**: Requiere tener Ollama corriendo localmente (`ollama serve`). Ideal para modelos gratuitos como Llama 3 o Mistral.
 
 
-Ejecutar todos los tests:
+Ejecutar todos los tests (Cucumber):
 ```bash
-npx playwright test
+npm test
 ```
 
-Ejecutar un test específico:
+Ejecutar un feature específico:
 ```bash
-npx playwright test src/screenplay/specs/login.spec.ts
+npx cucumber-js features/login.feature
 ```
+
 
 Ver el reporte HTML:
 ```bash
@@ -72,17 +76,15 @@ npx playwright show-report
 
 ```
 src/
-├── ai/                 
-│   ├── core/           # Orquestador (CodeGenerator)
-│   ├── infrastructure/ # Clientes externos (OpenAI, etc.)
-│   ├── prompts/        # Templates y lógica de prompts
-│   └── generator.ts    # CLI Entry Point
-├── screenplay/
-│   ├── actors/         # Definición de Actores y sus habilidades
-│   ├── interactions/   # Interacciones de bajo nivel
+├── ai/                 # Módulos de Inteligencia Artificial
+features/
+│   ├── step_definitions/ # Código TypeScript (binding)
+│   ├── support/          # Configuración de Cucumber/Serenity
+│   └── login.feature     # Archivos Gherkin (.feature)
+src/screenplay/
 │   ├── tasks/          # Tareas de negocio (e.g., Login, Search)
-│   ├── ui/             # Selectores y PageElements (Page Objects granulares)
-│   └── specs/          # Archivos de prueba (.spec.ts)
+│   ├── ui/             # Selectores y PageElements
+
 ```
 
 ## 🤖 Generación de Pruebas con AI (Beta)

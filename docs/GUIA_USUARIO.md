@@ -1,53 +1,62 @@
 # 📘 Guía de Usuario para No Técnicos
 
-Esta guía te ayudará a utilizar la herramienta de automatización sin necesidad de conocimientos profundos de programación.
+Esta guía te ayudará a utilizar la herramienta de automatización de pruebas escribiendo escenarios en lenguaje natural (Gherkin).
 
 ## ¿Qué puedo hacer?
-1. **Generar pruebas automáticamente** describiendo lo que quieres probar.
-2. **Ejecutar pruebas** para verificar que la aplicación funciona.
-3. **Ver reportes** visuales de los resultados.
+1. **Generar escenarios automáticamente** con ayuda de la Inteligencia Artificial.
+2. **Leer y entender las pruebas** existentes en la carpeta `features/`.
+3. **Ejecutar pruebas** para verificar el funcionamiento.
 
 ---
 
 ## 🤖 1. Generar una Prueba con IA
 
-Si quieres probar una nueva funcionalidad (ej. Buscador), usa el comando `ai:gen`.
+Si quieres probar una nueva funcionalidad, usa el comando `ai:gen`.
 
 **Comando:**
 ```bash
-npm run ai:gen "Descripción del escenario" nombre_archivo.spec.ts
+# Formato: npm run ai:gen "Descripción" nombre_archivo_sin_extension
+npm run ai:gen "El usuario busca 'iPhone' y ve resultados" busqueda
 ```
 
-**Ejemplo:**
-```bash
-npm run ai:gen "El usuario busca 'iPhone' y ve resultados" busqueda.spec.ts
-```
-> Esto creará un archivo nuevo en la carpeta de tests con el código necesario.
+**¿Qué sucede?**
+La IA creará dos archivos:
+- `features/busqueda.feature`: El escenario en texto plano (Given/When/Then).
+- `features/step_definitions/busqueda.steps.ts`: El código necesario para ejecutarlo.
 
 ---
 
-## ▶️ 2. Ejecutar Pruebas
+## 📖 2. Entendiendo las Pruebas (Gherkin)
 
-Para correr todas las pruebas y asegurar que todo está verde:
+Las pruebas están en la carpeta `features/`. Tienen este aspecto:
 
-**Comando:**
-```bash
-npm run test
+```gherkin
+Feature: Búsqueda de productos
+
+  Scenario: Usuario encuentra un iPhone
+    Given que el Actor "Cliente" está en la tienda
+    When busca el término "iPhone"
+    Then debería ver al menos 1 resultado
 ```
 
-Si quieres ver el navegador abriéndose y haciendo clicks (Modo Visual):
-```bash
-npm run test:ui
-```
+Es lenguaje natural que puedes leer y validar como requerimiento de negocio.
 
 ---
 
-## 📊 3. Ver Resultados
+## ▶️ 3. Ejecutar Pruebas
 
-Si alguna prueba falla, genera un reporte detallado con pasos y capturas de pantalla.
+Para correr todas las pruebas:
 
 **Comando:**
 ```bash
-npm run report
+npm test
 ```
-Se abrirá una página web en tu navegador con los detalles.
+
+Este comando leerá todos los archivos `.feature` y ejecutará los pasos definidos.
+
+---
+
+## 📊 4. Ver Resultados
+
+Al finalizar, se imprimirá un resumen en la consola. 
+(Opcional) Si configuraste reportes visuales, puedes verlos en la carpeta `target/site/serenity` o el reporte de consola.
