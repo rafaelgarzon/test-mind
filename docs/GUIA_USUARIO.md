@@ -56,7 +56,16 @@ Este comando leerá todos los archivos `.feature` y ejecutará los pasos definid
 
 ---
 
-## 📊 4. Ver Resultados
+## 📊 4. Reporte Visual (Serenity BDD)
 
-Al finalizar, se imprimirá un resumen en la consola. 
-(Opcional) Si configuraste reportes visuales, puedes verlos en la carpeta `target/site/serenity` o el reporte de consola.
+Para ver el resultado detallado de las pruebas con capturas de pantalla y pasos paso a paso:
+
+1. **Prerrequisito**: Debes tener **Java** instalado.
+2. **Generar reporte**:
+   ```bash
+   npm run report
+   ```
+3. **Ver reporte**:
+   Abre el archivo `target/site/serenity/index.html` en tu navegador.
+
+Verás un dashboard con gráficos de ejecución, tiempos y detalles de cada paso.
