@@ -3,14 +3,17 @@ import * as path from 'path';
 import { AIProvider } from '../infrastructure/AIProvider';
 import { ScreenplaySystemPrompt } from '../prompts/ScreenplaySystemPrompt';
 import { DuplicateDetector } from './DuplicateDetector';
+import { ProjectContextLoader } from './ProjectContextLoader';
 
 export class CodeGenerator {
     private aiClient: AIProvider;
     private duplicateDetector: DuplicateDetector;
+    private contextLoader: ProjectContextLoader;
 
     constructor(provider: AIProvider) {
         this.aiClient = provider;
         this.duplicateDetector = new DuplicateDetector(provider);
+        this.contextLoader = new ProjectContextLoader();
     }
 
     async generateTestSpecs(scenarioDescription: string, outputFilename: string): Promise<string> {
@@ -22,9 +25,14 @@ export class CodeGenerator {
             throw new Error(msg);
         }
 
+        // 2. Load Project Context
+        console.log("Loading project context (Tasks & UI)...");
+        const context = this.contextLoader.loadContext();
+        const prompt = ScreenplaySystemPrompt.replace('{{PROJECT_CONTEXT}}', context);
+
         console.log(`Generating Cucumber test for: ${scenarioDescription}`);
 
-        const resultRaw = await this.aiClient.generate(ScreenplaySystemPrompt, scenarioDescription);
+        const resultRaw = await this.aiClient.generate(prompt, scenarioDescription);
 
         let resultJson;
         try {
