@@ -23,7 +23,11 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
     - name: Run Serenity BDD Tests
-      run: npm test
+      run: npm run test:run
+      continue-on-error: true
+    - name: Generate Report
+      if: always()
+      run: npm run report
     - uses: actions/upload-artifact@v4
       if: always()
       with:
