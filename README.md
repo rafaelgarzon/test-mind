@@ -53,7 +53,19 @@ npx ts-node src/ai/generator.ts "Usuario busca un producto" search
 ### Proveedores Soportados
 
 1. **OpenAI**: Requiere `OPENAI_API_KEY`.
-2. **Ollama**: Requiere tener Ollama corriendo localmente (`ollama serve`). Ideal para modelos gratuitos como Llama 3 o Mistral.
+2. **Ollama**: Requiere tener Ollama corriendo.
+   
+   **Opción A: Docker (Recomendado)**
+   ```bash
+   # Iniciar Ollama
+   docker-compose up -d
+   
+   # Descargar el modelo (ej. llama3)
+   docker exec -it ollama_ai ollama pull llama3
+   ```
+
+   **Opción B: Local**
+   Instala y ejecuta `ollama serve`.
 
 
 Ejecutar todos los tests (Cucumber):
