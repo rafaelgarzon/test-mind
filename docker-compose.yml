@@ -9,6 +9,8 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
+    networks:
+      - automation-net
     # Uncomment to enable GPU support (requires NVIDIA Container Toolkit)
     # deploy:
     #   resources:
@@ -20,3 +22,7 @@ services:
 
 volumes:
   ollama_data:
+
+networks:
+  automation-net:
+    driver: bridge

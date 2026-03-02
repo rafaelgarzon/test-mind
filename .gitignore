@@ -8,3 +8,7 @@ coverage
 .idea
 .vscode
 target
+*.sqlite
+*.db
+.ollama
+

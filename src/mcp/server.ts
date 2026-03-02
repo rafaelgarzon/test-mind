@@ -4,7 +4,7 @@ import {
     CallToolRequestSchema,
     ListToolsRequestSchema,
     ErrorCode,
-    McpsError,
+    McpError,
 } from "@modelcontextprotocol/sdk/types.js";
 import * as child_process from 'child_process';
 import { generateTest } from '../ai/generator';
@@ -66,7 +66,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             const filename = String(request.params.arguments?.filename);
 
             if (!description || !filename) {
-                throw new McpsError(
+                throw new McpError(
                     ErrorCode.InvalidParams,
                     "Description and filename are required."
                 );
@@ -116,7 +116,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         default:
-            throw new McpsError(
+            throw new McpError(
                 ErrorCode.MethodNotFound,
                 `Unknown tool: ${request.params.name}`
             );

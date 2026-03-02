@@ -7,7 +7,7 @@ Framework de automatización de pruebas Front-end impulsado por **Serenity/JS**,
 - **Patrón Screenplay**: Código mantenible, legible y escalable.
 - **Serenity/JS**: Reportes vivos y abstracciones poderosas.
 - **Playwright**: Ejecución rápida y confiable en múltiples navegadores.
-- **AI Generator**: _(Experimental)_ Generación de pruebas a partir de descripciones en lenguaje natural.
+- **AI Generator**: _(Fase 4 Completada)_ Generación de pruebas a partir de descripciones en lenguaje natural. Incluye validación semántica, base de datos local de conocimiento, CLI interactivo (con soporte por lotes) y una Web UI básica.
 
 ## 📋 Prerrequisitos
 
@@ -38,22 +38,40 @@ Framework de automatización de pruebas Front-end impulsado por **Serenity/JS**,
    # AI_MODEL=llama3                         (opcional, por defecto es llama3)
    ```
 
-## 🤖 Generación de Pruebas con AI (Beta)
+## 🤖 Generación de Pruebas con AI (Fase 4)
 
-El generador soporta múltiples proveedores. Asegúrate de configurar `.env` correctamente.
+El generador de IA ahora cuenta con herramientas avanzadas para la creación y validación de escenarios Gherkin.
 
+### 🌐 Opción 1: Web UI (Recomendado)
+Levanta un servidor local con una interfaz gráfica simple para generar escenarios y pasos:
 ```bash
-# Generar usando el proveedor configurado en .env
+npm run ai:web
+```
+Abre tu navegador en `http://localhost:3000`.
+
+### 💻 Opción 2: CLI Interactivo y por Lotes
+Usa la interfaz de línea de comandos interactiva. Te permite generar escenarios uno a uno o por lotes (Batch):
 ```bash
-# El generador creará un archivo .feature y su steps.ts correspondiente
-npx ts-node src/ai/generator.ts "Usuario busca un producto" search
+npm run ai:cli
 ```
 
+### ⚙️ Generación Directa (Legacy)
+```bash
+# El generador creará un archivo .feature y su steps.ts correspondiente
+npm run ai:gen "Usuario busca un producto"
+```
+
+### 🏗️ Arquitectura de Generación (Serenity/JS)
+El generador está estrictamente configurado (vía Prompt Templates) para emitir código TypeScript que sigue el patrón **Screenplay** nativo de **Serenity/JS**. Todas las interacciones generadas usarán `actorCalled()`, `attemptsTo()`, y clases de UI/Tasks.
+
+### 🐛 Solución de Problemas Comunes (Troubleshooting)
+- **Error `ERR_CONNECTION_REFUSED` en `localhost:3000` (Mac ARM/M1/M2):** Ocurre si `sqlite3` está compilado para x86. Soluciónalo ejecutando: `npm rebuild sqlite3`.
+- **Error `AxiosError: timeout of 60000ms exceeded`:** La inferencia local de Ollama puede tardar más de 1 minuto en generar el archivo de Step Definitions complejo. El timeout ya está configurado a 5 minutos internamente, pero asegura que tu red no corte la petición y ten paciencia mientras Ollama procesa.
 
 ### Proveedores Soportados
 
 1. **OpenAI**: Requiere `OPENAI_API_KEY`.
-2. **Ollama**: Requiere tener Ollama corriendo.
+2. **Ollama**: Requiere tener Ollama corriendo (Recomendado: modelo local).
    
    **Opción A: Docker (Recomendado)**
    ```bash
@@ -67,6 +85,7 @@ npx ts-node src/ai/generator.ts "Usuario busca un producto" search
    **Opción B: Local**
    Instala y ejecuta `ollama serve`.
 
+## 🧪 Ejecución de Pruebas
 
 Ejecutar todos los tests (Cucumber):
 ```bash

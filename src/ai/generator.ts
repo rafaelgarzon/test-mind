@@ -26,3 +26,9 @@ if (require.main === module) {
             .catch(err => console.error("Generation failed:", err));
     }
 }
+
+export async function generateTest(description: string, filename: string) {
+    const provider = new OpenAIClient();
+    const generator = new CodeGenerator(provider);
+    return generator.generateTestSpecs(description, filename);
+}
