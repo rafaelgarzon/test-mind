@@ -8,6 +8,8 @@ export interface StoredScenario {
     gherkin_content: string;
     hash: string;
     created_at: string;
+    execution_status?: string;
+    execution_error?: string;
 }
 
 export class KnowledgeBase {
@@ -35,7 +37,11 @@ export class KnowledgeBase {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `;
-        this.db.run(sql);
+        this.db.run(sql, () => {
+            // Add new columns for execution results if they don't exist
+            this.db.run(`ALTER TABLE scenarios ADD COLUMN execution_status TEXT DEFAULT 'pending'`, () => { });
+            this.db.run(`ALTER TABLE scenarios ADD COLUMN execution_error TEXT`, () => { });
+        });
     }
 
     private generateHash(content: string): string {
@@ -81,6 +87,30 @@ export class KnowledgeBase {
             const sql = `SELECT * FROM scenarios WHERE description LIKE ? OR gherkin_content LIKE ?`;
             const param = `%${keyword}%`;
             this.db.all(sql, [param, param], (err, rows) => {
+                if (err) reject(err);
+                resolve(rows as StoredScenario[]);
+            });
+        });
+    }
+
+    async updateExecutionResult(id: number, status: 'passed' | 'failed', error: string = ''): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const sql = `UPDATE scenarios SET execution_status = ?, execution_error = ? WHERE id = ?`;
+            this.db.run(sql, [status, error, id], (err) => {
+                if (err) {
+                    console.error('Error updating execution result:', err);
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
+
+    async getFailedScenarios(limit: number = 5): Promise<StoredScenario[]> {
+        return new Promise((resolve, reject) => {
+            const sql = `SELECT * FROM scenarios WHERE execution_status = 'failed' ORDER BY created_at DESC LIMIT ?`;
+            this.db.all(sql, [limit], (err, rows) => {
                 if (err) reject(err);
                 resolve(rows as StoredScenario[]);
             });

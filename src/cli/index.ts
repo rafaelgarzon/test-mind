@@ -24,6 +24,7 @@ async function main() {
                 message: '¿Qué te gustaría hacer?',
                 choices: [
                     'Generar Escenario',
+                    'Generar Escenarios por Lotes',
                     'Verificar Estado de IA',
                     'Salir'
                 ]
@@ -82,6 +83,30 @@ async function main() {
                 } else {
                     console.log('❌ Falló la generación del escenario.');
                 }
+            }
+        }
+
+        if (action === 'Generar Escenarios por Lotes') {
+            console.log('Ingresa tus requerimientos uno por uno. Escribe "FIN" para terminar y procesar.');
+            const requirements: string[] = [];
+            while (true) {
+                const { req } = await inquirer.prompt([{
+                    type: 'input',
+                    name: 'req',
+                    message: `Requerimiento ${requirements.length + 1} (o 'FIN'):`
+                }]);
+                if (req.trim().toUpperCase() === 'FIN') break;
+                if (req.trim()) requirements.push(req.trim());
+            }
+
+            if (requirements.length > 0) {
+                const results = await generator.generateScenariosBatch(requirements);
+                console.log(`\nSe procesaron ${results.length} escenarios.`);
+                const successful = results.filter(r => r !== null).length;
+                console.log(`✅ Exitosos: ${successful}`);
+                console.log(`❌ Fallidos: ${results.length - successful}`);
+            } else {
+                console.log('No se ingresaron requerimientos.');
             }
         }
     }

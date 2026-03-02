@@ -12,7 +12,7 @@ export class OllamaProvider {
     constructor(config: OllamaConfig = { baseUrl: 'http://localhost:11434', model: 'llama3.2' }) {
         this.client = axios.create({
             baseURL: config.baseUrl,
-            timeout: 60000,
+            timeout: 300000, // 5 minutes timeout for local generation
         });
         this.model = config.model;
     }

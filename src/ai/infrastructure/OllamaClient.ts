@@ -19,7 +19,7 @@ export class OllamaClient implements AIProvider {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    model: this.model,
+                    model: this.model || 'tinyllama',
                     prompt: `${systemPrompt}\n\nTask: ${userPrompt}`, // Ollama chat/generate format can vary, simple prompt concat for 'generate'
                     stream: false
                 })

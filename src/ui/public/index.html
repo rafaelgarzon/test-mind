@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Test Generator (Phase 4)</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }
+        h1 { color: #333; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical; margin-bottom: 10px; }
+        button { background-color: #0066cc; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background-color: #0052a3; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        pre { background: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; }
+        .status { margin-bottom: 20px; font-weight: bold; }
+        .online { color: green; }
+        .offline { color: red; }
+    </style>
+</head>
+<body>
+    <h1>🤖 Generador de Pruebas AI (Fase 4)</h1>
+    
+    <div class="card">
+        <div class="status">Estado de IA (Ollama): <span id="status-indicator">Verificando...</span></div>
+        <p>Ingresa un requerimiento o historia de usuario en lenguaje natural:</p>
+        <textarea id="requirement" rows="4" placeholder="Ej: Usuario busca un producto válido y lo agrega al carrito."></textarea>
+        <button id="generate-btn">Generar Escenario (Gherkin)</button>
+    </div>
+
+    <div id="result-container" class="card" style="display: none;">
+        <h3>Resultado Gherkin</h3>
+        <pre id="gherkin-result"></pre>
+        <button id="generate-steps-btn">Generar Step Definitions</button>
+    </div>
+    
+    <div id="steps-container" class="card" style="display: none;">
+        <h3>Step Definitions (TypeScript)</h3>
+        <pre id="steps-result"></pre>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const statusInd = document.getElementById('status-indicator');
+            const reqInput = document.getElementById('requirement');
+            const genBtn = document.getElementById('generate-btn');
+            const resultDiv = document.getElementById('result-container');
+            const gherkinPre = document.getElementById('gherkin-result');
+            const genStepsBtn = document.getElementById('generate-steps-btn');
+            const stepsDiv = document.getElementById('steps-container');
+            const stepsPre = document.getElementById('steps-result');
+
+            fetch('/api/status')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'online') {
+                        statusInd.textContent = '🟢 En línea';
+                        statusInd.className = 'online';
+                    } else {
+                        statusInd.textContent = '🔴 Fuera de línea';
+                        statusInd.className = 'offline';
+                    }
+                }).catch(() => {
+                    statusInd.textContent = '🔴 Error de conexión';
+                    statusInd.className = 'offline';
+                });
+
+            let currentGherkin = '';
+
+            genBtn.addEventListener('click', async () => {
+                const requirement = reqInput.value.trim();
+                if (!requirement) return alert('Ingresa un requerimiento');
+
+                genBtn.disabled = true;
+                genBtn.textContent = 'Generando...';
+                resultDiv.style.display = 'none';
+                stepsDiv.style.display = 'none';
+
+                try {
+                    const res = await fetch('/api/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ requirement })
+                    });
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        currentGherkin = data.gherkin;
+                        gherkinPre.textContent = data.gherkin;
+                        resultDiv.style.display = 'block';
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (e) {
+                    alert('Error en la petición: ' + e);
+                } finally {
+                    genBtn.disabled = false;
+                    genBtn.textContent = 'Generar Escenario (Gherkin)';
+                }
+            });
+
+            genStepsBtn.addEventListener('click', async () => {
+                if (!currentGherkin) return;
+                
+                genStepsBtn.disabled = true;
+                genStepsBtn.textContent = 'Generando Steps...';
+                
+                try {
+                    const res = await fetch('/api/generate-steps', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ gherkin: currentGherkin })
+                    });
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        stepsPre.textContent = data.steps;
+                        stepsDiv.style.display = 'block';
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (e) {
+                    alert('Error en la petición: ' + e);
+                } finally {
+                    genStepsBtn.disabled = false;
+                    genStepsBtn.textContent = 'Generar Step Definitions';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
