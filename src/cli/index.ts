@@ -7,7 +7,7 @@ const generator = new ScenarioGenerator();
 const provider = new OllamaProvider();
 
 async function main() {
-    console.log('🤖 Generador de Pruebas Automatizado con IA (Fase 4) - Stack FREE');
+    console.log('🤖 Generador de Pruebas Automatizado con IA (Fase 5) - Stack FREE');
 
     // Initialize (check model)
     try {

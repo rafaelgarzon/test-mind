@@ -142,6 +142,7 @@ export class ScenarioGenerator {
 
         const meaningful = requirement
             .toLowerCase()
+            .replace(/[.,\-_]/g, ' ')
             .replace(/[^a-záéíóúña-z0-9\s]/gi, '')
             .split(/\s+/)
             .filter(w => w.length > 3 && !stopWords.has(w))
