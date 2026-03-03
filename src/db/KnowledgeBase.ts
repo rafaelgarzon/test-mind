@@ -1,3 +1,10 @@
+/**
+ * src/db/KnowledgeBase.ts
+ *
+ * Fase 6 (M-05): Añadida búsqueda por similitud Jaccard sobre palabras clave
+ * como alternativa semántica al LIKE textual. No requiere dependencias externas.
+ * Umbral por defecto: 0.35 (35% de palabras en común sobre la unión del vocabulario).
+ */
 import * as sqlite3 from 'sqlite3';
 import * as crypto from 'crypto';
 import * as path from 'path';
@@ -11,6 +18,17 @@ export interface StoredScenario {
     execution_status?: string;
     execution_error?: string;
 }
+
+export interface SimilarScenario extends StoredScenario {
+    similarity: number; // 0.0 a 1.0
+}
+
+// Palabras vacías ignoradas en la comparación (español + inglés)
+const STOP_WORDS = new Set([
+    'el','la','los','las','de','en','que','un','una','al','del','con','por','para',
+    'se','es','the','a','an','of','in','on','to','and','or','for','with','at',
+    'from','this','that','its','are','was','were','has','have','had','be','been',
+]);
 
 export class KnowledgeBase {
     private db: sqlite3.Database;
@@ -38,7 +56,6 @@ export class KnowledgeBase {
             )
         `;
         this.db.run(sql, () => {
-            // Add new columns for execution results if they don't exist
             this.db.run(`ALTER TABLE scenarios ADD COLUMN execution_status TEXT DEFAULT 'pending'`, () => { });
             this.db.run(`ALTER TABLE scenarios ADD COLUMN execution_error TEXT`, () => { });
         });
@@ -48,10 +65,69 @@ export class KnowledgeBase {
         return crypto.createHash('sha256').update(content.trim()).digest('hex');
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // Fase 6 (M-05): Similitud Jaccard sobre palabras clave
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Tokeniza texto en palabras clave (≥4 chars, sin stop words, sin puntuación).
+     */
+    private tokenize(text: string): Set<string> {
+        return new Set(
+            text
+                .toLowerCase()
+                .replace(/[^a-z0-9\s]/gi, ' ')
+                .split(/\s+/)
+                .filter(w => w.length >= 4 && !STOP_WORDS.has(w))
+        );
+    }
+
+    /**
+     * Índice de Jaccard: |A ∩ B| / |A ∪ B|
+     * Retorna 0.0 (sin similitud) a 1.0 (idéntico).
+     */
+    private jaccard(a: string, b: string): number {
+        const setA = this.tokenize(a);
+        const setB = this.tokenize(b);
+        if (setA.size === 0 && setB.size === 0) return 1.0;
+        if (setA.size === 0 || setB.size === 0) return 0.0;
+
+        const intersection = [...setA].filter(w => setB.has(w)).length;
+        const union = new Set([...setA, ...setB]).size;
+        return intersection / union;
+    }
+
+    private async getAllScenarios(): Promise<StoredScenario[]> {
+        return new Promise((resolve, reject) => {
+            this.db.all('SELECT * FROM scenarios', [], (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows as StoredScenario[]);
+            });
+        });
+    }
+
+    /**
+     * Fase 6 (M-05): Busca escenarios semánticamente similares.
+     * Detecta duplicados semánticos como "iniciar sesión" vs "ingresar al sistema".
+     *
+     * @param requirement  Texto del requerimiento a comparar
+     * @param threshold    Similitud mínima (0.0–1.0). Default: 0.35
+     */
+    async findSimilar(requirement: string, threshold: number = 0.35): Promise<SimilarScenario[]> {
+        const all = await this.getAllScenarios();
+        return all
+            .map(s => ({ ...s, similarity: this.jaccard(requirement, s.description) }))
+            .filter(s => s.similarity >= threshold)
+            .sort((a, b) => b.similarity - a.similarity);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Métodos existentes (sin cambios de comportamiento)
+    // ─────────────────────────────────────────────────────────────────
+
     async addScenario(description: string, gherkinContent: string): Promise<number | null> {
         const hash = this.generateHash(gherkinContent);
 
-        // Check for duplicate
         const isDuplicate = await this.isDuplicate(hash);
         if (isDuplicate) {
             console.log('Scenario is a duplicate.');
@@ -82,6 +158,10 @@ export class KnowledgeBase {
         });
     }
 
+    /**
+     * Búsqueda textual por keyword (LIKE). Mantenida por compatibilidad.
+     * Para búsqueda semántica usar findSimilar().
+     */
     async searchScenarios(keyword: string): Promise<StoredScenario[]> {
         return new Promise((resolve, reject) => {
             const sql = `SELECT * FROM scenarios WHERE description LIKE ? OR gherkin_content LIKE ?`;

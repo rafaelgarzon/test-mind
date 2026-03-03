@@ -1,0 +1,39 @@
+/**
+ * src/config.ts — Fase 6: Validación centralizada de variables de entorno
+ *
+ * Valida al arranque que la configuración sea coherente.
+ * Importar `config` en vez de leer process.env directamente.
+ */
+import { z } from 'zod';
+import * as dotenv from 'dotenv';
+dotenv.config();
+
+const EnvSchema = z.object({
+    AI_PROVIDER: z.enum(['openai', 'ollama']).default('ollama'),
+    OPENAI_API_KEY: z.string().optional(),
+    OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
+    AI_MODEL: z.string().default('llama3.2'),
+    PORT: z.coerce.number().int().positive().default(3000),
+}).refine(
+    (env) => env.AI_PROVIDER !== 'openai' || !!env.OPENAI_API_KEY,
+    {
+        message: 'OPENAI_API_KEY es requerida cuando AI_PROVIDER=openai',
+        path: ['OPENAI_API_KEY'],
+    }
+);
+
+export type AppConfig = z.infer<typeof EnvSchema>;
+
+function loadConfig(): AppConfig {
+    const result = EnvSchema.safeParse(process.env);
+    if (!result.success) {
+        console.error('❌ Configuración de entorno inválida:');
+        result.error.issues.forEach((issue) => {
+            console.error(`   ${String(issue.path.join('.'))}: ${issue.message}`);
+        });
+        process.exit(1);
+    }
+    return result.data;
+}
+
+export const config = loadConfig();

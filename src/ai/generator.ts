@@ -1,3 +1,8 @@
+/**
+ * @deprecated Fase 6 (M-07): Punto de entrada legacy (Fase 4).
+ * Usar `npm run ai:web` o `npm run ai:cli` para el pipeline Fase 5 con calidad.
+ * Este archivo se eliminará en Fase 7.
+ */
 import { CodeGenerator } from './core/CodeGenerator';
 import { OpenAIClient } from './infrastructure/OpenAIClient';
 import { OllamaClient } from './infrastructure/OllamaClient';

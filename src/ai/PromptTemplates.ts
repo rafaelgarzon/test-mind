@@ -174,6 +174,4 @@ Fix the scenario so it addresses the error and correctly implements the requirem
 Output ONLY the corrected Gherkin scenario.
 `;
 
-// Alias de compatibilidad para no romper imports existentes en ScenarioGenerator (Fase 4).
-// Se elimina en la proxima limpieza de deuda tecnica.
-export const GHERKIN_PROMPT_TEMPLATE = buildGherkinPrompt('{requirement}', 'en');
+// Alias eliminado en Fase 6 (M-04). Usar buildGherkinPrompt(requirement, lang).

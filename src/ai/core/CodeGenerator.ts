@@ -1,3 +1,8 @@
+/**
+ * @deprecated Fase 6 (M-07): Reemplazado por ScenarioGenerator (src/ai/ScenarioGenerator.ts)
+ * que incluye detección de idioma, scoring de calidad y bucle de auto-corrección (Fase 5).
+ * Este archivo se eliminará en Fase 7.
+ */
 import * as fs from 'fs';
 import * as path from 'path';
 import { AIProvider } from '../infrastructure/AIProvider';
@@ -5,6 +10,7 @@ import { ScreenplaySystemPrompt } from '../prompts/ScreenplaySystemPrompt';
 import { DuplicateDetector } from './DuplicateDetector';
 import { ProjectContextLoader } from './ProjectContextLoader';
 
+/** @deprecated Usar ScenarioGenerator */
 export class CodeGenerator {
     private aiClient: AIProvider;
     private duplicateDetector: DuplicateDetector;

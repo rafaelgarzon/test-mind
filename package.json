@@ -13,7 +13,10 @@
     "ai:gen": "npx ts-node src/ai/generator.ts",
     "ai:cli": "npx ts-node src/cli/index.ts",
     "ai:web": "npx ts-node src/ui/server.ts",
-    "clean": "rm -rf test-results playwright-report target"
+    "clean": "rm -rf test-results playwright-report target",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:unit:coverage": "vitest run --coverage"
   },
   "keywords": [],
   "author": "",
@@ -46,6 +49,7 @@
     "@types/inquirer": "^9.0.9",
     "@types/node": "^25.1.0",
     "@types/sqlite3": "^3.1.11",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "vitest": "^4.0.18"
   }
 }

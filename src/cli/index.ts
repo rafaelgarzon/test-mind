@@ -2,6 +2,7 @@
 import inquirer from 'inquirer';
 import { ScenarioGenerator } from '../ai/ScenarioGenerator';
 import { OllamaProvider } from '../ai/OllamaProvider';
+import '../config'; // Fase 6 (M-06): valida variables de entorno al arranque
 
 const generator = new ScenarioGenerator();
 const provider = new OllamaProvider();
