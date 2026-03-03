@@ -1,11 +1,16 @@
+/**
+ * Fase 6 (M-01): OllamaProvider ahora implementa AIProvider.
+ * Es el único cliente Ollama activo. OllamaClient queda deprecado.
+ */
 import axios, { AxiosInstance } from 'axios';
+import { AIProvider } from './infrastructure/AIProvider';
 
 export interface OllamaConfig {
     baseUrl: string;
     model: string;
 }
 
-export class OllamaProvider {
+export class OllamaProvider implements AIProvider {
     private client: AxiosInstance;
     private model: string;
 
@@ -80,5 +85,14 @@ export class OllamaProvider {
 
     getModelName(): string {
         return this.model;
+    }
+
+    /**
+     * Fase 6 (M-01): Implementa AIProvider.generate() para que OllamaProvider
+     * sea intercambiable con OpenAIClient en CodeGenerator y otros consumidores.
+     */
+    async generate(systemPrompt: string, userPrompt: string): Promise<string> {
+        const prompt = `${systemPrompt}\n\nTask: ${userPrompt}`;
+        return this.generateCompletion(prompt);
     }
 }

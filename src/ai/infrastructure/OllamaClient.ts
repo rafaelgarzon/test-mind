@@ -1,7 +1,13 @@
+/**
+ * @deprecated Fase 6 (M-01): Usar OllamaProvider (src/ai/OllamaProvider.ts) que
+ * ahora implementa AIProvider con gestión avanzada de modelos y timeout de 5 min.
+ * Este archivo se eliminará en Fase 7.
+ */
 import { AIProvider } from "./AIProvider";
 import * as dotenv from 'dotenv';
 dotenv.config();
 
+/** @deprecated Ver módulo: usar OllamaProvider */
 export class OllamaClient implements AIProvider {
     private baseUrl: string;
     private model: string;

@@ -3,9 +3,10 @@ import cors from 'cors';
 import path from 'path';
 import { ScenarioGenerator } from '../ai/ScenarioGenerator';
 import { OllamaProvider } from '../ai/OllamaProvider';
+import { config } from '../config'; // Fase 6 (M-06): validación de entorno al arranque
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = config.PORT;
 
 app.use(cors());
 app.use(express.json());
