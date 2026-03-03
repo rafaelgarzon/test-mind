@@ -38,9 +38,14 @@ Framework de automatización de pruebas Front-end impulsado por **Serenity/JS**,
    # AI_MODEL=llama3                         (opcional, por defecto es llama3)
    ```
 
-## 🤖 Generación de Pruebas con AI (Fase 4 y Fase 5)
+## 🤖 Generación de Pruebas con AI (Fase 4, 5 y 6)
 
-El generador de IA ahora cuenta con herramientas avanzadas para la creación y validación de escenarios Gherkin, potenciadas por el **GherkinQA Engine (Fase 5)**.
+El generador de IA cuenta con herramientas avanzadas para la creación y validación de escenarios Gherkin, potenciadas por motores de calidad y una base técnica robusta.
+
+### 🏗️ Fundaciones Técnicas y Testing (Fase 6)
+- **Providers Intercambiables**: Arquitectura unificada (`AIProvider`) que soporta instanciar fácilmente Ollama, OpenAI o nuevos modelos de forma modular.
+- **Búsqueda Semántica**: La base de conocimiento SQLite ahora detecta escenarios similares previamente ejecutados utilizando el _Coeficiente de Jaccard_ (buscando superposición de palabras clave) sin necesidad de similitud exacta de strings.
+- **Validación de Entornos & Unit Tests**: Configuración de `vitest.config.ts` optimizada para el motor IA (excluyendo pruebas end-to-end lentas) y un validador en `config.ts` que arranca validando el `process.env`.
 
 ### ✨ Nuevas Características de Calidad (Fase 5)
 - **Language Detector**: Detecta automáticamente si tu requerimiento está en Español o Inglés y obliga al LLM a generar los pasos estrictamente en ese idioma (sin mezclar Spanglish).
