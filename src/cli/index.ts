@@ -59,9 +59,9 @@ async function main() {
                 const result = await generator.generateScenario(requirement);
                 if (result) {
                     console.log('\n--- Gherkin Generado ---\n');
-                    console.log(result);
+                    console.log(result.gherkin);
                     console.log('\n-------------------------\n');
-                    console.log('✅ Escenario guardado en la Base de Conocimiento.');
+                    console.log(`✅ Escenario guardado en la Base de Conocimiento (Calidad: ${result.quality.score}/100 - ${result.quality.passed ? 'APROBADO' : 'CON OBSERVACIONES'}).`);
 
                     const { generateSteps } = await inquirer.prompt([
                         {
@@ -73,7 +73,7 @@ async function main() {
                     ]);
 
                     if (generateSteps) {
-                        const steps = await generator.generateStepDefinitions(result);
+                        const steps = await generator.generateStepDefinitions(result.gherkin);
                         if (steps) {
                             console.log('\n--- Step Definitions Generados ---\n');
                             console.log(steps);

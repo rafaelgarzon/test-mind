@@ -14,7 +14,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 const generator = new ScenarioGenerator();
 const provider = new OllamaProvider();
 
-// Initialize generator on startup
 generator.initialize().catch(console.error);
 
 app.get('/api/status', async (req, res) => {
@@ -26,6 +25,7 @@ app.get('/api/status', async (req, res) => {
     }
 });
 
+// FASE 5: /api/generate ahora retorna { success, gherkin, quality: { score, passed, issues } }
 app.post('/api/generate', async (req, res) => {
     const { requirement } = req.body;
     if (!requirement) {
@@ -33,9 +33,17 @@ app.post('/api/generate', async (req, res) => {
     }
 
     try {
-        const gherkin = await generator.generateScenario(requirement);
-        if (gherkin) {
-            res.json({ success: true, gherkin });
+        const result = await generator.generateScenario(requirement);
+        if (result) {
+            res.json({
+                success: true,
+                gherkin: result.gherkin,
+                quality: {
+                    score: result.quality.score,
+                    passed: result.quality.passed,
+                    issues: result.quality.issues,
+                },
+            });
         } else {
             res.status(500).json({ error: 'Failed to generate scenario or validation failed' });
         }

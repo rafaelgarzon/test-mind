@@ -1,35 +1,104 @@
-export const GHERKIN_PROMPT_TEMPLATE = `
-You are an expert QA Automation Engineer. Your task is to convert the following user requirement into a high-quality Gherkin scenario (Cucumber format).
+// ─────────────────────────────────────────────────────────────────────────────
+// FASE 5: GHERKIN_PROMPT_TEMPLATE convertido a función para soportar idioma
+// ─────────────────────────────────────────────────────────────────────────────
 
-Rules:
-1. Use GIVEN, WHEN, THEN, AND keywords.
-2. Be concise and specific.
-3. Do NOT include any explanations or markdown formatting outside the Gherkin code.
-4. Use valid Gherkin syntax.
-
-User Requirement: "{requirement}"
-
-Examples:
-
-Requirement: "Login with valid credentials"
-Feature: User Authentication
-Scenario: Successful Login
-  Given the user is on the login page
-  When the user enters valid username "admin" and password "1234"
-  And clicks the login button
-  Then the user should be redirected to the dashboard
-  And the welcome message should be displayed
-
-Requirement: "Search for a product"
-Feature: Product Search
-Scenario: Product Search
-  Given the user is on the homepage
-  When the user searches for "Laptop"
-  Then search results for "Laptop" should be displayed
-  And the results list should not be empty
-
-Output ONLY the Gherkin scenario.
+const SPANISH_GHERKIN_EXAMPLE = `
+Requerimiento: "iniciar sesion con credenciales validas"
+Feature: Autenticacion de Usuario
+  Scenario: Inicio de sesion exitoso
+    Given que el usuario esta en "https://example.com/login"
+    When ingresa "admin" en el campo de usuario
+    And ingresa "Admin1234!" en el campo de contrasena
+    And hace clic en el boton "Ingresar"
+    Then deberia ver el mensaje "Bienvenido, admin"
+    And la URL deberia contener "/dashboard"
 `;
+
+const ENGLISH_GHERKIN_EXAMPLE = `
+Requirement: "login with valid credentials"
+Feature: User Authentication
+  Scenario: Successful login with valid credentials
+    Given the user is on "https://example.com/login"
+    When the user enters "admin" in the username field
+    And enters "Admin1234!" in the password field
+    And clicks the "Sign In" button
+    Then the user should see "Welcome, admin"
+    And the URL should contain "/dashboard"
+`;
+
+export const buildGherkinPrompt = (requirement: string, lang: 'es' | 'en' = 'en'): string => {
+  const langInstruction = lang === 'es'
+    ? 'IMPORTANTE: Escribe TODOS los pasos en ESPAÑOL. No mezcles con inglés.'
+    : 'Write ALL steps in ENGLISH.';
+
+  const example = lang === 'es' ? SPANISH_GHERKIN_EXAMPLE : ENGLISH_GHERKIN_EXAMPLE;
+
+  return `
+You are an expert QA Automation Engineer. Convert the following requirement into a high-quality Gherkin scenario.
+
+${langInstruction}
+
+NAMING RULES:
+- Feature: Short business capability name (2-5 words). NEVER use the raw requirement as the name.
+  BAD:  Feature: ingresa al sitio google.com y busca hoteles
+  GOOD: Feature: Busqueda de Hoteles
+- Scenario: Describes the specific behavior being tested. NEVER say "Generated Scenario for...".
+  BAD:  Scenario: Generated Scenario for ingresa al sitio...
+  GOOD: Scenario: Busqueda exitosa de hoteles cerca de Hacienda Napoles
+
+STEP QUALITY RULES:
+- Given: specific URL or concrete precondition with quoted value
+- When: action with CONCRETE DATA in double quotes (what the user types, the button text, etc.)
+  BAD:  When the user performs a hotel search near Hacienda Napoles
+  GOOD: When the user types "hoteles cerca de hacienda napoles" in the search bar
+- Then: verifiable assertion with SPECIFIC expected text or element in double quotes
+  BAD:  Then the first result of the search should be displayed
+  GOOD: Then the search results should contain "Hacienda Napoles" in the first result title
+- Use AND for multiple actions of the same type (multiple Whens or multiple Thens)
+
+User Requirement: "${requirement}"
+
+Example:
+${example}
+
+Output ONLY the Gherkin scenario. No markdown. No explanations.
+`.trim();
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FASE 5: Nuevo prompt de refinamiento para el bucle de calidad
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const buildRefinementPrompt = (
+  requirement: string,
+  previousGherkin: string,
+  suggestions: string[],
+  lang: 'es' | 'en'
+): string => {
+  const langInstruction = lang === 'es'
+    ? 'IMPORTANTE: Escribe TODOS los pasos en ESPAÑOL.'
+    : 'Write ALL steps in ENGLISH.';
+
+  return `
+The Gherkin scenario below has quality issues. Fix ONLY the listed problems and return a corrected version.
+
+${langInstruction}
+
+User Requirement: "${requirement}"
+
+Previous scenario (has issues):
+${previousGherkin}
+
+Problems to fix:
+${suggestions.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+
+Output ONLY the corrected Gherkin scenario. No markdown. No explanations.
+`.trim();
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mantener los templates existentes de Fase 4 sin cambios
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const STEP_DEFINITION_PROMPT_TEMPLATE = `
 You are an expert QA Automation Engineer using CucumberJS, TypeScript, and Serenity/JS (Screenplay Pattern).
@@ -104,3 +173,7 @@ Execution Error/Feedback:
 Fix the scenario so it addresses the error and correctly implements the requirement.
 Output ONLY the corrected Gherkin scenario.
 `;
+
+// Alias de compatibilidad para no romper imports existentes en ScenarioGenerator (Fase 4).
+// Se elimina en la proxima limpieza de deuda tecnica.
+export const GHERKIN_PROMPT_TEMPLATE = buildGherkinPrompt('{requirement}', 'en');
