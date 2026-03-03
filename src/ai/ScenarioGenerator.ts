@@ -1,6 +1,13 @@
 import { OllamaProvider } from './OllamaProvider';
 import { KnowledgeBase } from '../db/KnowledgeBase';
-import { GHERKIN_PROMPT_TEMPLATE, SCENARIO_VALIDATION_PROMPT_TEMPLATE, LEARNING_FEEDBACK_PROMPT_TEMPLATE } from './PromptTemplates';
+import {
+    buildGherkinPrompt,
+    buildRefinementPrompt,
+    SCENARIO_VALIDATION_PROMPT_TEMPLATE,
+    LEARNING_FEEDBACK_PROMPT_TEMPLATE,
+} from './PromptTemplates';
+import { LanguageDetector } from './core/LanguageDetector';
+import { GherkinQualityScorer, QualityReport } from './core/GherkinQualityScorer';
 
 export class ScenarioGenerator {
     private ollama: OllamaProvider;
@@ -19,62 +26,98 @@ export class ScenarioGenerator {
             console.error('Asegúrate de que Docker esté corriendo y el contenedor de Ollama esté activo.');
             console.error('Ejecuta: "docker-compose up -d ollama"\n');
             console.error(`Detalle del error: ${error.message || error}`);
-
-            // Don't exit process here, just let the caller handle it or continue with limited functionality if possible, 
-            // but for now, since it's critical, we just log it loud.
-            throw new Error("Ollama connection failed");
+            throw new Error('Ollama connection failed');
         }
     }
 
-    async generateScenario(userRequirement: string): Promise<string | null> {
+    // ─────────────────────────────────────────────────────────────────────────
+    // FASE 5: generateScenario con bucle de calidad (máximo 3 intentos)
+    // ─────────────────────────────────────────────────────────────────────────
+    async generateScenario(
+        userRequirement: string,
+        maxAttempts: number = 3
+    ): Promise<{ gherkin: string; quality: QualityReport } | null> {
+
         console.log(`Generating scenario for: "${userRequirement}"`);
 
-        // Check if similar scenario already exists in KB (simple keyword search for now as "cache hit" proxy)
-        // In a real V2 agent, we would use vector search.
+        const lang = LanguageDetector.detect(userRequirement);
+        const scorer = new GherkinQualityScorer();
+
+        // Check KB for similar scenarios
         const existing = await this.kb.searchScenarios(userRequirement);
         if (existing.length > 0) {
             console.log('Similar scenarios found in Knowledge Base:');
-            existing.forEach(s => console.log(`- [ID ${s.id}] ${s.description}`));
-            // For now, we still generate, but in future we could return existing.
+            existing.forEach(s => console.log(`  - [ID ${s.id}] ${s.description}`));
         }
 
-        const prompt = GHERKIN_PROMPT_TEMPLATE.replace('{requirement}', userRequirement);
+        let bestGherkin: string | null = null;
+        let bestReport: QualityReport = { score: 0, passed: false, issues: [], suggestions: [] };
 
-        try {
-            const gherkin = await this.ollama.generateCompletion(prompt);
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            console.log(`🔄 Attempt ${attempt}/${maxAttempts} (lang: ${lang})`);
 
-            // Try to force complete if the model just returns steps
-            let finalGherkin = gherkin.trim();
-            if (!finalGherkin.includes('Scenario:')) {
-                finalGherkin = `Feature: Generated Feature\nScenario: Generated Scenario for ${userRequirement}\n${finalGherkin}`;
+            const prompt = attempt === 1
+                ? buildGherkinPrompt(userRequirement, lang)
+                : buildRefinementPrompt(userRequirement, bestGherkin!, bestReport.suggestions, lang);
+
+            try {
+                const rawResponse = await this.ollama.generateCompletion(prompt);
+                let finalGherkin = rawResponse.trim();
+
+                // FASE 5: Fallback mejorado — extrae nombre semántico en vez de "Generated Feature"
+                if (!finalGherkin.includes('Feature:')) {
+                    const featureName = this.buildFeatureName(userRequirement, lang);
+                    const scenarioName = this.buildScenarioName(userRequirement, lang);
+                    finalGherkin = `Feature: ${featureName}\n  Scenario: ${scenarioName}\n${finalGherkin}`;
+                } else if (!finalGherkin.includes('Scenario:')) {
+                    const scenarioName = this.buildScenarioName(userRequirement, lang);
+                    finalGherkin = finalGherkin.replace(
+                        /Feature:(.+)/,
+                        `Feature:$1\n  Scenario: ${scenarioName}`
+                    );
+                }
+
+                const report = scorer.score(finalGherkin, lang);
+                console.log(`📊 Quality: ${report.score}/100 — ${report.passed ? '✅ PASS' : '❌ FAIL'}`);
+                if (report.issues.length > 0) {
+                    report.issues.forEach(i => console.log(`   ⚠ ${i}`));
+                }
+
+                if (report.score > bestReport.score) {
+                    bestReport = report;
+                    bestGherkin = finalGherkin;
+                }
+
+                if (report.passed) break;
+
+            } catch (error) {
+                console.error(`Error on attempt ${attempt}:`, error);
             }
+        }
 
-            // Syntax Validation
-            if (!this.validateGherkinSyntax(finalGherkin)) {
-                console.error('Generated Gherkin is syntactically invalid.');
-                return null;
-            }
-
-            // Semantic Validation
-            const isSemanticallyValid = await this.validateGherkinSemantic(userRequirement, finalGherkin);
-            if (!isSemanticallyValid) {
-                console.error('Generated Gherkin is semantically invalid for the requirement.');
-                return null;
-            }
-
-            // Save to KB
-            await this.kb.addScenario(userRequirement, finalGherkin);
-
-            return finalGherkin;
-        } catch (error) {
-            console.error('Error during generation:', error);
+        if (!bestGherkin) {
+            console.error('All generation attempts failed.');
             return null;
         }
+
+        if (!this.validateGherkinSyntax(bestGherkin)) {
+            console.error('Generated Gherkin is syntactically invalid.');
+            return null;
+        }
+
+        const isSemanticallyValid = await this.validateGherkinSemantic(userRequirement, bestGherkin);
+        if (!isSemanticallyValid) {
+            console.error('Generated Gherkin is semantically invalid for the requirement.');
+            return null;
+        }
+
+        await this.kb.addScenario(userRequirement, bestGherkin);
+        return { gherkin: bestGherkin, quality: bestReport };
     }
 
-    async generateScenariosBatch(requirements: string[]): Promise<(string | null)[]> {
+    async generateScenariosBatch(requirements: string[]): Promise<({ gherkin: string; quality: QualityReport } | null)[]> {
         console.log(`\n📦 Starting batch processing for ${requirements.length} requirements...`);
-        const results: (string | null)[] = [];
+        const results = [];
 
         for (let i = 0; i < requirements.length; i++) {
             console.log(`\n⏳ Processing requirement ${i + 1}/${requirements.length}`);
@@ -86,10 +129,46 @@ export class ScenarioGenerator {
         return results;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // FASE 5: Helpers para generar nombres semanticos en el fallback
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private buildFeatureName(requirement: string, lang: 'es' | 'en'): string {
+        const stopWords = new Set([
+            'el', 'la', 'los', 'las', 'de', 'en', 'que', 'un', 'una', 'al', 'del', 'con',
+            'por', 'para', 'se', 'es', 'the', 'a', 'an', 'of', 'in', 'on', 'to', 'and', 'or',
+            'for', 'with', 'at', 'from', 'ingresa', 'realiza', 'valida', 'sitio', 'pagina',
+        ]);
+
+        const meaningful = requirement
+            .toLowerCase()
+            .replace(/[.,\-_]/g, ' ')
+            .replace(/[^a-záéíóúña-z0-9\s]/gi, '')
+            .split(/\s+/)
+            .filter(w => w.length > 3 && !stopWords.has(w))
+            .slice(0, 3)
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1));
+
+        return meaningful.length > 0 ? meaningful.join(' ') : (lang === 'es' ? 'Flujo de Usuario' : 'User Flow');
+    }
+
+    private buildScenarioName(requirement: string, lang: 'es' | 'en'): string {
+        const cleaned = requirement
+            .replace(/^(ingresa|accede|abre|navega|verifica|valida|realiza)\s+/i, '')
+            .trim();
+
+        const prefix = lang === 'es' ? 'Flujo exitoso: ' : 'Successful flow: ';
+        const shortened = cleaned.length > 60 ? cleaned.substring(0, 57) + '...' : cleaned;
+        return prefix + shortened.charAt(0).toUpperCase() + shortened.slice(1);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Validaciones existentes (sin cambios de Fase 4)
+    // ─────────────────────────────────────────────────────────────────────────
+
     private validateGherkinSyntax(content: string): boolean {
         const hasScenario = content.includes('Scenario:') || content.includes('Scenario Outline:');
         const hasSteps = content.includes('Given') || content.includes('When') || content.includes('Then');
-
         return hasScenario && hasSteps;
     }
 
@@ -109,14 +188,11 @@ export class ScenarioGenerator {
             }
         } catch (error) {
             console.error('Error during semantic validation:', error);
-            // Default to true if validation fails to avoid blocking the user entirely if LLM is flaky
-            return true;
+            return true; // Default permissive — sin cambio intencional
         }
     }
 
     async improveFailedScenario(scenarioId: number): Promise<string | null> {
-        // This is a simple implementation of the feedback cycle.
-        // It fetches a failed scenario, sends it to the LLM with the error, and generates a new version.
         try {
             const failedScenarios = await this.kb.getFailedScenarios(50);
             const target = failedScenarios.find(s => s.id === scenarioId);
@@ -138,11 +214,8 @@ export class ScenarioGenerator {
                 return null;
             }
 
-            // Save the improved scenario as a new entry. In a real system you might want to version it.
             await this.kb.addScenario(`${target.description} (Improved from ID ${scenarioId})`, improvedGherkin);
             console.log(`✅ Learning cycle complete.`);
-
-            // Mark the old one as 'resolved' or similar if needed, for now we just keep it as failed.
 
             return improvedGherkin;
         } catch (error) {
@@ -153,7 +226,8 @@ export class ScenarioGenerator {
 
     async generateStepDefinitions(gherkinScenario: string): Promise<string | null> {
         console.log('Generating step definitions...');
-        const prompt = (await import('./PromptTemplates')).STEP_DEFINITION_PROMPT_TEMPLATE.replace('{scenario}', gherkinScenario);
+        const { STEP_DEFINITION_PROMPT_TEMPLATE } = await import('./PromptTemplates');
+        const prompt = STEP_DEFINITION_PROMPT_TEMPLATE.replace('{scenario}', gherkinScenario);
 
         try {
             const steps = await this.ollama.generateCompletion(prompt);

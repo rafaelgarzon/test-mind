@@ -38,9 +38,15 @@ Framework de automatización de pruebas Front-end impulsado por **Serenity/JS**,
    # AI_MODEL=llama3                         (opcional, por defecto es llama3)
    ```
 
-## 🤖 Generación de Pruebas con AI (Fase 4)
+## 🤖 Generación de Pruebas con AI (Fase 4 y Fase 5)
 
-El generador de IA ahora cuenta con herramientas avanzadas para la creación y validación de escenarios Gherkin.
+El generador de IA ahora cuenta con herramientas avanzadas para la creación y validación de escenarios Gherkin, potenciadas por el **GherkinQA Engine (Fase 5)**.
+
+### ✨ Nuevas Características de Calidad (Fase 5)
+- **Language Detector**: Detecta automáticamente si tu requerimiento está en Español o Inglés y obliga al LLM a generar los pasos estrictamente en ese idioma (sin mezclar Spanglish).
+- **Gherkin Quality Scorer**: Evalúa semánticamente el Gherkin devuelto por la IA, restando puntos si hay nombres genéricos o aserciones muy vagas sin datos reales.
+- **Self-Healing Loop**: Si el Gherkin generado obtiene un puntaje menor a 70/100, el generador ejecuta peticiones de auto-corrección ("refinement prompts") indicándole al modelo cómo arreglarlo, con un máximo de 3 intentos computacionales invisibles para el usuario.
+- **Quality Badges en Web UI**: Verás indicadores visuales del puntaje que la IA logró internamente antes de entregarte el resultado.
 
 ### 🌐 Opción 1: Web UI (Recomendado)
 Levanta un servidor local con una interfaz gráfica simple para generar escenarios y pasos:
