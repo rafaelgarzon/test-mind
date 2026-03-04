@@ -5,6 +5,7 @@ import { ScenarioGenerator } from '../ai/ScenarioGenerator';
 import { OllamaProvider } from '../ai/OllamaProvider';
 import { PreviewAgent } from '../ai/agents/PreviewAgent';
 import { implement } from '../ai/agents/ScenarioImplementer';
+import { createWebMcpRouter, updateUIState } from '../mcp/webmcp-server';
 import { config } from '../config'; // Fase 6 (M-06): validación de entorno al arranque
 
 const app = express();
@@ -13,6 +14,10 @@ const port = config.PORT;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Fase 7.2: Montar servidor MCP HTTP+SSE en /mcp
+app.use('/mcp', createWebMcpRouter());
+console.log(`🔌 MCP SSE endpoint disponible en http://localhost:${config.PORT}/mcp/sse`);
 
 const generator = new ScenarioGenerator();
 const provider = new OllamaProvider();
@@ -38,15 +43,14 @@ app.post('/api/generate', async (req, res) => {
     try {
         const result = await generator.generateScenario(requirement);
         if (result) {
-            res.json({
-                success: true,
-                gherkin: result.gherkin,
-                quality: {
-                    score: result.quality.score,
-                    passed: result.quality.passed,
-                    issues: result.quality.issues,
-                },
-            });
+            const quality = {
+                score: result.quality.score,
+                passed: result.quality.passed,
+                issues: result.quality.issues,
+            };
+            // Fase 7.2: sincronizar estado con WebMCP server
+            updateUIState({ gherkin: result.gherkin, quality });
+            res.json({ success: true, gherkin: result.gherkin, quality });
         } else {
             res.status(500).json({ error: 'Failed to generate scenario or validation failed' });
         }
@@ -63,6 +67,8 @@ app.post('/api/generate-steps', async (req, res) => {
 
     try {
         const steps = await generator.generateStepDefinitions(gherkin);
+        // Fase 7.2: sincronizar steps en estado WebMCP
+        if (steps) updateUIState({ steps });
         res.json({ success: true, steps });
     } catch (e) {
         res.status(500).json({ error: String(e) });
@@ -115,6 +121,16 @@ app.post('/api/implement', async (req: express.Request, res: express.Response) =
         console.error('[/api/implement] Error:', err.message);
         res.status(500).json({ error: err.message });
     }
+});
+
+/**
+ * GET /api/state — Fase 7.2
+ * Retorna el estado actual de la UI (último gherkin, steps y quality).
+ * Usado por el WebMCP tool get_scenario_state.
+ */
+app.get('/api/state', (_req, res) => {
+    const { getUIState } = require('../mcp/webmcp-server');
+    res.json(getUIState());
 });
 
 app.listen(port, () => {
