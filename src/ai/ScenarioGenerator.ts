@@ -116,9 +116,11 @@ export class ScenarioGenerator {
                 ...bestReport,
                 issues: [...bestReport.issues, '⚠️ La validación semántica automática tuvo dudas sobre la relevancia. Verifica con Vista Previa.'],
             };
+            // No guardamos en KB si la validación semántica falla para evitar contaminar futuras búsquedas
+        } else {
+            await this.kb.addScenario(userRequirement, bestGherkin);
         }
 
-        await this.kb.addScenario(userRequirement, bestGherkin);
         return { gherkin: bestGherkin, quality: bestReport };
     }
 
