@@ -3,11 +3,18 @@
  *
  * Orquestador del preview: instancia PlaywrightMcpClient + ScenarioPreviewRunner
  * y retorna el resultado completo con screenshots por paso.
+ *
+ * La traducción de pasos usa heurístico por defecto (instantáneo).
+ * El LLM se intenta opcionalmente con timeout corto (12s) y se omite si Ollama
+ * está ocupado, evitando que el preview quede bloqueado por inferencia lenta.
  */
 import { PlaywrightMcpClient, PlaywrightMcpOptions } from '../../mcp/playwright-client';
 import { ScenarioPreviewRunner, PreviewResult } from './ScenarioPreviewRunner';
 import { OllamaProvider } from '../OllamaProvider';
 import { config } from '../../config';
+
+/** Timeout para conectar al proceso playwright-mcp */
+const CONNECT_TIMEOUT_MS = 30_000;
 
 export class PreviewAgent {
     private readonly options: PlaywrightMcpOptions;
@@ -24,8 +31,19 @@ export class PreviewAgent {
         let executor: PlaywrightMcpClient | null = null;
 
         try {
-            executor = await PlaywrightMcpClient.create(this.options);
+            // Conectar al MCP de Playwright con timeout para evitar hang indefinido
+            executor = await Promise.race<PlaywrightMcpClient>([
+                PlaywrightMcpClient.create(this.options),
+                new Promise<never>((_, reject) =>
+                    setTimeout(
+                        () => reject(new Error('Timeout al conectar con playwright-mcp. Verifica que @playwright/mcp esté instalado.')),
+                        CONNECT_TIMEOUT_MS
+                    )
+                ),
+            ]);
 
+            // Pasar OllamaProvider como AI opcional para mejorar la traducción.
+            // Si Ollama tarda > 12s, el runner cae automáticamente al heurístico.
             const ai = new OllamaProvider();
             const runner = new ScenarioPreviewRunner(ai, executor, this.options.browser ?? 'chromium');
 
