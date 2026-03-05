@@ -329,6 +329,9 @@ export class ScenarioPreviewRunner {
             if ((needle.includes('field') || needle.includes('input') || needle.includes('campo')) && /textbox|input/.test(role)) score += 20;
             if (needle.includes('link') && role === 'link') score += 15;
             if (needle.includes('checkbox') && role === 'checkbox') score += 15;
+            // Bonus específico para búsqueda: cualquier input en una sección search
+            if ((needle.includes('search') || needle.includes('buscar') || needle.includes('busqueda'))
+                && /^(textbox|combobox|searchbox|input)/.test(role)) score += 25;
 
             // Bonus: elementos con cursor pointer son generalmente interactivos
             if (line.includes('[cursor=pointer]') && toolHint === 'browser_click') score += 8;
@@ -336,7 +339,54 @@ export class ScenarioPreviewRunner {
             candidates.push({ ref, score, line: line.trim() });
         }
 
-        if (candidates.length === 0) return null;
+        // ── Fallback cuando ningún candidato coincide ────────────────────────
+        if (candidates.length === 0) {
+            // browser_type → primer input (textbox/combobox/searchbox) de la página
+            if (toolHint === 'browser_type' || toolHint === 'browser_fill') {
+                for (const line of lines) {
+                    const refMatch = line.match(/\[ref=(e\d+)\]/);
+                    if (!refMatch) continue;
+                    if (/^\s*-\s+(textbox|combobox|searchbox|input|textarea)\s/i.test(line)) {
+                        const ref = refMatch[1];
+                        console.log(`[PreviewRunner] Fallback browser_type: primer input → ${ref} (${line.trim().substring(0, 60)})`);
+                        return ref;
+                    }
+                }
+            }
+
+            // browser_click con "primer/first/segundo/second..." → Nth link/button con cursor:pointer
+            if (toolHint === 'browser_click') {
+                const ordinalMap: Record<string, number> = {
+                    primer: 1, primero: 1, first: 1, '1st': 1, '1ro': 1, '1er': 1,
+                    segundo: 2, second: 2, '2nd': 2,
+                    tercer: 3, tercero: 3, third: 3, '3rd': 3,
+                };
+                let targetN = 1;
+                for (const [word, n] of Object.entries(ordinalMap)) {
+                    if (needle.includes(word)) { targetN = n; break; }
+                }
+                // Recopilar todos los links/buttons interactivos
+                const interactive: string[] = [];
+                for (const line of lines) {
+                    const refMatch = line.match(/\[ref=(e\d+)\]/);
+                    if (!refMatch) continue;
+                    if (/^\s*-\s+(link|button)\s/i.test(line) && line.includes('[cursor=pointer]')) {
+                        interactive.push(refMatch[1]);
+                    }
+                }
+                if (interactive.length >= targetN) {
+                    const ref = interactive[targetN - 1];
+                    console.log(`[PreviewRunner] Fallback browser_click: elemento #${targetN} interactivo → ${ref}`);
+                    return ref;
+                }
+                // Si no hay suficientes, devolver el primero disponible
+                if (interactive.length > 0) {
+                    console.log(`[PreviewRunner] Fallback browser_click: primer interactivo → ${interactive[0]}`);
+                    return interactive[0];
+                }
+            }
+            return null;
+        }
 
         candidates.sort((a, b) => b.score - a.score);
         console.log(`[PreviewRunner] Mejor ref para "${elementDesc}" (${toolHint}): ${candidates[0].ref} (score=${candidates[0].score}, line: "${candidates[0].line.substring(0, 80)}")`);

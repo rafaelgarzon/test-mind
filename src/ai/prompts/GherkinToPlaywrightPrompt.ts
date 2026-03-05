@@ -190,9 +190,10 @@ export function heuristicTranslate(step: ParsedGherkinStep): TranslatedPlaywrigh
             inputText = quoted[0];
 
             if (isSearch) {
-                // Para search steps usar "Buscar" o "Search" — coincide con el label
-                // del combobox de Google y otros buscadores ("Buscar"/"Search"/"Búsqueda")
-                element = /busca|b[uú]squeda/i.test(text) ? 'Buscar' : 'Search';
+                // Descriptor multi-idioma para que findRefInSnapshot encuentre el campo
+                // de búsqueda tanto en sitios en español ("Buscar") como en inglés ("Search").
+                // El fallback en findRefInSnapshot usará el primer textbox/combobox si no hay match.
+                element = 'search buscar búsqueda';
             } else {
                 // Try to find field name after "in the ..." or "en el/la ..."
                 const inFieldMatch = step.text.match(/\bin\s+(?:the|a|el|la|los|las)?\s+([^"']+?)(?:\s+field|\s+input|\s+box|\s+campo)?\s*$/i);
