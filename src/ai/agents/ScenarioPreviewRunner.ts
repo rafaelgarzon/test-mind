@@ -74,9 +74,9 @@ export class ScenarioPreviewRunner {
         }
 
         // Traducir Gherkin → acciones Playwright con timeout
-        const actions = await Promise.race([
+        const actions = await Promise.race<TranslatedPlaywrightAction[]>([
             this.translateSteps(parsedSteps),
-            this.timeout(PREVIEW_TIMEOUT_MS, 'Timeout traduciendo pasos'),
+            this.timeout<TranslatedPlaywrightAction[]>(PREVIEW_TIMEOUT_MS, 'Timeout traduciendo pasos'),
         ]);
 
         const results: StepPreviewResult[] = [];
