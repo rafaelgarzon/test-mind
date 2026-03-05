@@ -231,8 +231,8 @@ export function heuristicTranslate(step: ParsedGherkinStep): TranslatedPlaywrigh
         };
     }
 
-    // Then/Entonces → wait for visible text or URL fragment
-    if (step.keyword === 'Then' || step.keyword === 'Entonces') {
+    // Then (GherkinStepParser already normalizes Entonces→Then)
+    if (step.keyword === 'Then') {
         // Use the first quoted value (already extracted from both ' and " quotes)
         // If nothing quoted, extract meaningful text: remove "should see/deberia ver/contener" prefixes
         const waitText = quoted[0] ?? step.text
