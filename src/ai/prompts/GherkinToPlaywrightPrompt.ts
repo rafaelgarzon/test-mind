@@ -122,17 +122,64 @@ export function heuristicTranslate(step: ParsedGherkinStep): TranslatedPlaywrigh
 
     // Click
     if (/click|press|tap|haz clic|pulsa|da clic/.test(text)) {
+        // Extract element from: "clicks the 'X' button" or "clicks 'X'"
+        // or contextual: "clicks the login button" → "login button"
+        let elementDesc: string;
+        if (quoted.length > 0) {
+            elementDesc = quoted[0];
+        } else {
+            // Remove action keywords and articles to get element name
+            elementDesc = step.text
+                .replace(/^(the user|user|el usuario|usuario)\s+/i, '')
+                .replace(/^(click|clicks|press|presses|tap|taps|haz clic en|pulsa|da clic en)\s+(the|el|la|los|las|on the|en el|en la)?\s*/i, '')
+                .trim() || step.text;
+        }
         return {
             stepIndex: step.index, stepText: step.text,
             toolName: 'browser_click',
-            toolArgs: { element: quoted[0] ?? step.text },
+            toolArgs: { element: elementDesc },
         };
     }
 
-    // Type / input
+    // Type / input — patterns:
+    // 1. types "value" in the "field name" → element=field name, text=value
+    // 2. types "value" in the field name   → element=field name, text=value (field unquoted)
+    // 3. enters "field name" with "value"  → element=field name, text=value
     if (/type|enter|fill|input|write|ingresa|escribe|introduce/.test(text) && quoted.length >= 1) {
-        const element = quoted.length >= 2 ? quoted[0] : (text.replace(/ingresa|escribe|introduce|type|enter|fill|input|write/, '').trim() || 'input field');
-        const inputText = quoted.length >= 2 ? quoted[1] : quoted[0];
+        let element: string;
+        let inputText: string;
+
+        if (quoted.length >= 2) {
+            // Both field and value are quoted — determine order
+            // "type in 'field' the value 'val'" or "type 'val' in 'field'"
+            const afterFirstQuote = step.text.substring(step.text.indexOf(`"${quoted[0]}"`) + quoted[0].length + 2);
+            if (/\bin\b|\ben\b/i.test(afterFirstQuote)) {
+                // "type 'value' in 'field'" → quoted[0]=value, quoted[1]=field
+                inputText = quoted[0];
+                element = quoted[1];
+            } else {
+                // "enter 'field' with 'value'" → quoted[0]=field, quoted[1]=value
+                element = quoted[0];
+                inputText = quoted[1];
+            }
+        } else {
+            // Single quote: extract value and infer field from surrounding text
+            inputText = quoted[0];
+            // Try to find field name after "in the ..." or "en el/la ..."
+            const inFieldMatch = step.text.match(/\bin\s+(?:the|a|el|la|los|las)?\s+([^"]+?)(?:\s+field|\s+input|\s+box|\s+campo)?\s*$/i);
+            if (inFieldMatch) {
+                element = inFieldMatch[1].trim().replace(/^(the|a|el|la)\s+/i, '').trim();
+            } else {
+                // Fallback: remove action verb + quoted text to find field name
+                element = step.text
+                    .replace(/"[^"]*"/g, '')
+                    .replace(/^(the user|user|el usuario|usuario)\s+/i, '')
+                    .replace(/^(types?|enters?|fills?|inputs?|writes?|ingresa|escribe|introduce)\s+/i, '')
+                    .replace(/\b(in|into|in the|en el|en la|en)\b/i, '')
+                    .replace(/\s+/g, ' ')
+                    .trim() || 'input field';
+            }
+        }
         return {
             stepIndex: step.index, stepText: step.text,
             toolName: 'browser_type',
