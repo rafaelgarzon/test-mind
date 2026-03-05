@@ -105,10 +105,17 @@ export class ScenarioGenerator {
             return null;
         }
 
+        // Fase 7: La validación semántica es no-bloqueante — si falla, se agrega
+        // como advertencia en el quality report pero NO bloquea la generación.
+        // Esto permite que el usuario vea el Gherkin generado y lo valide
+        // usando el preview real (ejecución en navegador) antes de implementar.
         const isSemanticallyValid = await this.validateGherkinSemantic(userRequirement, bestGherkin);
         if (!isSemanticallyValid) {
-            console.error('Generated Gherkin is semantically invalid for the requirement.');
-            return null;
+            console.warn('⚠️  Semantic validation returned INVALID — continuing with generated Gherkin (non-blocking).');
+            bestReport = {
+                ...bestReport,
+                issues: [...bestReport.issues, '⚠️ La validación semántica automática tuvo dudas sobre la relevancia. Verifica con Vista Previa.'],
+            };
         }
 
         await this.kb.addScenario(userRequirement, bestGherkin);
