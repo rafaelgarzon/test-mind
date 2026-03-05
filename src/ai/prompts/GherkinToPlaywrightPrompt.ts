@@ -99,10 +99,15 @@ ${stepsJson}`;
  */
 export function heuristicTranslate(step: ParsedGherkinStep): TranslatedPlaywrightAction {
     const text = step.text.toLowerCase();
-    const quoted = step.text.match(/"([^"]+)"/g)?.map(s => s.replace(/"/g, '')) ?? [];
+
+    // Extraer strings entre comillas dobles O simples (el LLM puede generar ambos)
+    const quoted = [
+        ...(step.text.match(/"([^"]+)"/g)?.map(s => s.slice(1, -1)) ?? []),
+        ...(step.text.match(/'([^']+)'/g)?.map(s => s.slice(1, -1)) ?? []),
+    ].filter((v, i, arr) => arr.indexOf(v) === i);  // dedup
 
     // URL directa
-    const urlMatch = step.text.match(/https?:\/\/[^\s"]+/);
+    const urlMatch = step.text.match(/https?:\/\/[^\s"']+/);
     if (urlMatch) {
         return {
             stepIndex: step.index, stepText: step.text,
@@ -117,6 +122,18 @@ export function heuristicTranslate(step: ParsedGherkinStep): TranslatedPlaywrigh
             stepIndex: step.index, stepText: step.text,
             toolName: 'browser_navigate',
             toolArgs: { url: quoted[0] },
+        };
+    }
+
+    // Press key (Enter, Tab, Escape, etc.) — before click to avoid conflict with "press Enter"
+    if (/press\s+(key\s+)?(enter|return|tab|escape|esc|space|intro|retorno)/i.test(text)) {
+        const keyMatch = text.match(/press\s+(?:key\s+)?(enter|return|tab|escape|esc|space|intro|retorno)/i);
+        const keyMap: Record<string, string> = { enter: 'Enter', return: 'Enter', intro: 'Enter', retorno: 'Enter', tab: 'Tab', escape: 'Escape', esc: 'Escape', space: 'Space' };
+        const raw = (keyMatch?.[1] ?? 'enter').toLowerCase();
+        return {
+            stepIndex: step.index, stepText: step.text,
+            toolName: 'browser_press_key',
+            toolArgs: { key: keyMap[raw] ?? 'Enter' },
         };
     }
 
@@ -145,14 +162,20 @@ export function heuristicTranslate(step: ParsedGherkinStep): TranslatedPlaywrigh
     // 1. types "value" in the "field name" → element=field name, text=value
     // 2. types "value" in the field name   → element=field name, text=value (field unquoted)
     // 3. enters "field name" with "value"  → element=field name, text=value
-    if (/type|enter|fill|input|write|ingresa|escribe|introduce/.test(text) && quoted.length >= 1) {
+    // 4. searches for "value"              → element=search box, text=value, submit=true
+    if (/type|enter|fill|input|write|ingresa|escribe|introduce|busca|search/.test(text) && quoted.length >= 1) {
         let element: string;
         let inputText: string;
 
+        // ¿Es una búsqueda? → submit=true para enviar el formulario al terminar
+        const isSearch = /busca|search\s+for|search\s+by|realiza\s+(una\s+)?b[uú]squeda/i.test(text);
+
         if (quoted.length >= 2) {
             // Both field and value are quoted — determine order
-            // "type in 'field' the value 'val'" or "type 'val' in 'field'"
-            const afterFirstQuote = step.text.substring(step.text.indexOf(`"${quoted[0]}"`) + quoted[0].length + 2);
+            // "type 'value' in 'field'" or "enter 'field' with 'value'"
+            const afterFirstQuote = step.text.substring(
+                step.text.search(/["']/) + quoted[0].length + 2
+            );
             if (/\bin\b|\ben\b/i.test(afterFirstQuote)) {
                 // "type 'value' in 'field'" → quoted[0]=value, quoted[1]=field
                 inputText = quoted[0];
@@ -165,25 +188,37 @@ export function heuristicTranslate(step: ParsedGherkinStep): TranslatedPlaywrigh
         } else {
             // Single quote: extract value and infer field from surrounding text
             inputText = quoted[0];
-            // Try to find field name after "in the ..." or "en el/la ..."
-            const inFieldMatch = step.text.match(/\bin\s+(?:the|a|el|la|los|las)?\s+([^"]+?)(?:\s+field|\s+input|\s+box|\s+campo)?\s*$/i);
-            if (inFieldMatch) {
-                element = inFieldMatch[1].trim().replace(/^(the|a|el|la)\s+/i, '').trim();
+
+            if (isSearch) {
+                // Para search steps usar "Buscar" o "Search" — coincide con el label
+                // del combobox de Google y otros buscadores ("Buscar"/"Search"/"Búsqueda")
+                element = /busca|b[uú]squeda/i.test(text) ? 'Buscar' : 'Search';
             } else {
-                // Fallback: remove action verb + quoted text to find field name
-                element = step.text
-                    .replace(/"[^"]*"/g, '')
-                    .replace(/^(the user|user|el usuario|usuario)\s+/i, '')
-                    .replace(/^(types?|enters?|fills?|inputs?|writes?|ingresa|escribe|introduce)\s+/i, '')
-                    .replace(/\b(in|into|in the|en el|en la|en)\b/i, '')
-                    .replace(/\s+/g, ' ')
-                    .trim() || 'input field';
+                // Try to find field name after "in the ..." or "en el/la ..."
+                const inFieldMatch = step.text.match(/\bin\s+(?:the|a|el|la|los|las)?\s+([^"']+?)(?:\s+field|\s+input|\s+box|\s+campo)?\s*$/i);
+                if (inFieldMatch) {
+                    element = inFieldMatch[1].trim().replace(/^(the|a|el|la)\s+/i, '').trim();
+                } else {
+                    // Fallback: remove action verb + quoted text to find field name
+                    element = step.text
+                        .replace(/["'][^"']*["']/g, '')
+                        .replace(/^(the user|user|el usuario|usuario)\s+/i, '')
+                        .replace(/^(types?|enters?|fills?|inputs?|writes?|ingresa|escribe|introduce)\s+/i, '')
+                        .replace(/\b(in|into|in the|en el|en la|en)\b/i, '')
+                        .replace(/\s+/g, ' ')
+                        .trim() || 'input field';
+                }
             }
         }
+
+        const toolArgs: Record<string, unknown> = { element, text: inputText };
+        // Submit = true for search steps (press Enter after typing)
+        if (isSearch) toolArgs.submit = true;
+
         return {
             stepIndex: step.index, stepText: step.text,
             toolName: 'browser_type',
-            toolArgs: { element, text: inputText },
+            toolArgs,
         };
     }
 
@@ -196,12 +231,20 @@ export function heuristicTranslate(step: ParsedGherkinStep): TranslatedPlaywrigh
         };
     }
 
-    // Then → wait for visible text
-    if (step.keyword === 'Then') {
+    // Then/Entonces → wait for visible text or URL fragment
+    if (step.keyword === 'Then' || step.keyword === 'Entonces') {
+        // Use the first quoted value (already extracted from both ' and " quotes)
+        // If nothing quoted, extract meaningful text: remove "should see/deberia ver/contener" prefixes
+        const waitText = quoted[0] ?? step.text
+            .replace(/^(the user|user|el usuario|usuario)\s+/i, '')
+            .replace(/^(should see|should contain|debería ver|deberia ver|debería contener|deberia contener|should be|debería estar|ve|see)\s+/i, '')
+            .replace(/^(the message|el mensaje|el texto|the text)\s+/i, '')
+            .trim();
+
         return {
             stepIndex: step.index, stepText: step.text,
             toolName: 'browser_wait_for',
-            toolArgs: { text: quoted[0] ?? step.text },
+            toolArgs: { text: waitText },
         };
     }
 

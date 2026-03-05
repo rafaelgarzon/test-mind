@@ -197,6 +197,12 @@ export class ScenarioPreviewRunner {
                     currentSnapshotText = result.content.find(c => c.type === 'text')?.text ?? null;
                 }
 
+                // Si browser_type hizo submit (formulario de búsqueda), esperar
+                // que la navegación post-submit se complete antes de seguir
+                if (toolName === 'browser_type' && toolArgs.submit === true) {
+                    await this.executor.execute('browser_wait_for', { time: 4 });
+                }
+
                 // Tomar screenshot después de cada paso
                 const screenshotResult = await this.executor.execute('browser_take_screenshot', {});
                 screenshotBase64 = this.extractScreenshot(screenshotResult);
@@ -305,8 +311,10 @@ export class ScenarioPreviewRunner {
 
             // ── Bonus por tipo de rol según el tool ──────────────────────────
             if (toolHint === 'browser_type' || toolHint === 'browser_fill') {
-                if (/^(textbox|input|textarea|searchbox)/.test(role)) score += 30;
-                if (/^(heading|text|paragraph)/.test(role)) score -= 20;
+                // combobox y searchbox son inputs válidos (ej: barra de búsqueda de Google)
+                if (/^(textbox|input|textarea|searchbox|combobox)/.test(role)) score += 30;
+                // Penalizar roles que no son inputs
+                if (/^(heading|text|paragraph|generic|form|search)$/.test(role)) score -= 20;
             }
             if (toolHint === 'browser_click') {
                 if (/^(button|link|menuitem|tab|checkbox|radio)/.test(role)) score += 20;
