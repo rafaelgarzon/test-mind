@@ -38,29 +38,28 @@ You are an expert QA Automation Engineer. Convert the following requirement into
 
 ${langInstruction}
 
+CRITICAL: Generate steps that implement EXACTLY the user requirement below. Do NOT copy from the examples — they are only format references.
+
 NAMING RULES:
-- Feature: Short business capability name (2-5 words). NEVER use the raw requirement as the name.
-  BAD:  Feature: ingresa al sitio google.com y busca hoteles
-  GOOD: Feature: Busqueda de Hoteles
-- Scenario: Describes the specific behavior being tested. NEVER say "Generated Scenario for...".
-  BAD:  Scenario: Generated Scenario for ingresa al sitio...
-  GOOD: Scenario: Busqueda exitosa de hoteles cerca de Hacienda Napoles
+- Feature: 2-5 word business capability derived from the requirement. NEVER copy example names.
+- Scenario: Describes the specific behavior from the requirement. NEVER say "Generated Scenario for...".
 
 STEP QUALITY RULES:
-- Given: specific URL or concrete precondition with quoted value
-- When: action with CONCRETE DATA in double quotes (what the user types, the button text, etc.)
-  BAD:  When the user performs a hotel search near Hacienda Napoles
-  GOOD: When the user types "hoteles cerca de hacienda napoles" in the search bar
-- Then: verifiable assertion with SPECIFIC expected text or element in double quotes
-  BAD:  Then the first result of the search should be displayed
-  GOOD: Then the search results should contain "Hacienda Napoles" in the first result title
-- Use AND for multiple actions of the same type (multiple Whens or multiple Thens)
+- Given: specific URL or concrete precondition with a quoted value derived from the REQUIREMENT
+- When: action with CONCRETE DATA in double quotes extracted from the REQUIREMENT
+  BAD:  When the user performs an action
+  GOOD: When the user types "concrete-value-from-requirement" in the field
+- Then: verifiable assertion with SPECIFIC expected text from the REQUIREMENT in double quotes
+  BAD:  Then the result should be displayed
+  GOOD: Then the page should show "specific-text-from-requirement"
+- Use AND for multiple actions of the same type
 
 User Requirement: "${requirement}"
 
-Example:
+Format reference (structure only — do NOT copy the content):
 ${example}
 
+Now generate a Gherkin scenario for the User Requirement above.
 Output ONLY the Gherkin scenario. No markdown. No explanations.
 `.trim();
 };

@@ -14,6 +14,10 @@ const EnvSchema = z.object({
     OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
     AI_MODEL: z.string().default('llama3.2'),
     PORT: z.coerce.number().int().positive().default(3000),
+    // Fase 7: Preview y auto-implementación
+    PREVIEW_BROWSER: z.enum(['chromium', 'firefox', 'webkit']).default('chromium'),
+    PREVIEW_HEADLESS: z.coerce.boolean().default(true),
+    IMPLEMENT_FEATURES_DIR: z.string().optional(),   // ruta absoluta opcional; por defecto ./features
 }).refine(
     (env) => env.AI_PROVIDER !== 'openai' || !!env.OPENAI_API_KEY,
     {
