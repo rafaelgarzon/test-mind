@@ -123,6 +123,12 @@ export class ScenarioPreviewRunner {
     /**
      * Ejecuta los pasos en el navegador con patrón snapshot-first para refs.
      * Retorna `true` si hubo fallo.
+     *
+     * Mejoras Fase 7 (rev 3):
+     *  - Pasos Then: verificación por snapshot antes de browser_wait_for
+     *    (detecta "Proceed To Checkout" cuando se busca "Checkout")
+     *  - browser_type fallback: solo aplica a pasos de búsqueda (submit=true)
+     *  - Normalización de idioma en findRefInSnapshot
      */
     private async executeSteps(
         parsedSteps: ReturnType<typeof GherkinStepParser.parse>,
@@ -171,7 +177,17 @@ export class ScenarioPreviewRunner {
                     }
 
                     if (currentSnapshotText) {
-                        const foundRef = this.findRefInSnapshot(currentSnapshotText, String(toolArgs.element), toolName);
+                        // Fix 3: Pasar 'browser_type_search' para steps de búsqueda
+                        // para que el fallback de "primer input" solo aplique a búsquedas
+                        const typeHint = (toolName === 'browser_type' && toolArgs.submit === true)
+                            ? 'browser_type_search'
+                            : toolName;
+
+                        const foundRef = this.findRefInSnapshot(
+                            currentSnapshotText,
+                            String(toolArgs.element),
+                            typeHint,
+                        );
                         if (foundRef) {
                             toolArgs = { ...toolArgs, ref: foundRef };
                             console.log(`[PreviewRunner] ${toolName}: ref=${foundRef} para element="${toolArgs.element}"`);
@@ -181,29 +197,61 @@ export class ScenarioPreviewRunner {
                     }
                 }
 
-                // ── Ejecutar la acción del paso ───────────────────────────────────
-                const result = await this.executor.execute(toolName, toolArgs);
-                if (result.isError) {
-                    throw new Error(result.content.find(c => c.type === 'text')?.text ?? 'Tool error');
+                // ── Fix 2: Then-step snapshot verification ────────────────────────
+                // Los pasos Then ("debería ver...") verifican presencia de texto en la
+                // página. browser_wait_for usa getByText() exact — falla si el texto
+                // es substring de un elemento ("Checkout" en "Proceed To Checkout").
+                // Solución: primero buscar en el snapshot completo (substring match),
+                // que incluye labels de botones, links, headings, etc.
+                let thenVerifiedViaSnapshot = false;
+                if (toolName === 'browser_wait_for' && step.keyword === 'Then' && toolArgs.text) {
+                    // Asegurar snapshot actualizado
+                    if (!currentSnapshotText) {
+                        const snapResult = await this.executor.execute('browser_snapshot', {});
+                        currentSnapshotText = snapResult.content.find(c => c.type === 'text')?.text ?? null;
+                    }
+
+                    if (currentSnapshotText) {
+                        const expectedText = this.normalizeForSearch(String(toolArgs.text));
+                        const snapshotNorm = this.normalizeForSearch(currentSnapshotText);
+
+                        if (snapshotNorm.includes(expectedText)) {
+                            console.log(`[PreviewRunner] ✅ Then verificado por snapshot: "${toolArgs.text}"`);
+                            thenVerifiedViaSnapshot = true;
+                        } else {
+                            // No encontrado en snapshot: reducir timeout de browser_wait_for
+                            // a 3s para no bloquear demasiado (el error será más rápido)
+                            console.log(`[PreviewRunner] "${toolArgs.text}" no encontrado en snapshot — intentando browser_wait_for (3s)`);
+                            toolArgs = { ...toolArgs, timeout: 3000 };
+                        }
+                    }
                 }
 
-                // Invalidar snapshot tras navegación o acción interactiva
-                if (toolName === 'browser_navigate' || TOOLS_NEEDING_REF.has(toolName)) {
-                    currentSnapshotText = null;
+                // ── Ejecutar la acción del paso (salvo que Then ya verificado) ────
+                if (!thenVerifiedViaSnapshot) {
+                    const result = await this.executor.execute(toolName, toolArgs);
+                    if (result.isError) {
+                        throw new Error(result.content.find(c => c.type === 'text')?.text ?? 'Tool error');
+                    }
+
+                    // Invalidar snapshot tras navegación o acción interactiva
+                    if (toolName === 'browser_navigate' || TOOLS_NEEDING_REF.has(toolName)) {
+                        currentSnapshotText = null;
+                    }
+
+                    // Si el tool retornó un snapshot, almacenarlo en caché
+                    if (toolName === 'browser_snapshot') {
+                        currentSnapshotText = result.content.find(c => c.type === 'text')?.text ?? null;
+                    }
+
+                    // Si browser_type hizo submit (búsqueda), esperar navegación post-submit
+                    if (toolName === 'browser_type' && toolArgs.submit === true) {
+                        await this.executor.execute('browser_wait_for', { time: 4 });
+                        currentSnapshotText = null; // Página cambió tras búsqueda
+                    }
                 }
 
-                // Si el tool retornó un snapshot, almacenarlo en caché
-                if (toolName === 'browser_snapshot') {
-                    currentSnapshotText = result.content.find(c => c.type === 'text')?.text ?? null;
-                }
-
-                // Si browser_type hizo submit (formulario de búsqueda), esperar
-                // que la navegación post-submit se complete antes de seguir
-                if (toolName === 'browser_type' && toolArgs.submit === true) {
-                    await this.executor.execute('browser_wait_for', { time: 4 });
-                }
-
-                // Tomar screenshot después de cada paso
+                // Tomar screenshot después de cada paso (incluye pasos Then verificados)
                 const screenshotResult = await this.executor.execute('browser_take_screenshot', {});
                 screenshotBase64 = this.extractScreenshot(screenshotResult);
 
@@ -237,6 +285,52 @@ export class ScenarioPreviewRunner {
     }
 
     /**
+     * Normaliza texto para búsqueda cross-language:
+     *  1. Elimina tildes/diacríticos (á→a, é→e, ñ→n, etc.)
+     *  2. Mapea términos UI comunes español→inglés
+     * Esto permite que un step en español encuentre elementos con labels en inglés
+     * y viceversa (ej: "carrito" → "cart", "contraseña" → "password").
+     */
+    private normalizeForSearch(text: string): string {
+        // Mapa de términos UI español → inglés (ordenado por frecuencia de uso)
+        const ES_TO_EN: Record<string, string> = {
+            buscar: 'search',   busqueda: 'search',  buscador: 'search',
+            carrito: 'cart',    cesta: 'cart',       canasta: 'cart',
+            contrasena: 'password', clave: 'password',
+            correo: 'email',    electronico: 'email',
+            usuario: 'username', nombre: 'name',     apellido: 'lastname',
+            ingresar: 'login',  iniciar: 'login',    entrar: 'login',    sesion: 'session',
+            registrar: 'register', registro: 'register', cuenta: 'account',
+            inicio: 'home',     portada: 'home',
+            agregar: 'add',     anadir: 'add',
+            eliminar: 'delete', borrar: 'delete',    remover: 'remove',
+            siguiente: 'next',  anterior: 'previous', atras: 'back',
+            confirmar: 'confirm', aceptar: 'accept', cancelar: 'cancel',
+            enviar: 'submit',   guardar: 'save',     proceder: 'proceed',
+            pagar: 'checkout',  comprar: 'buy',      tienda: 'shop',
+            producto: 'product', precio: 'price',
+            boton: 'button',    campo: 'field',      enlace: 'link',
+            mensaje: 'message', texto: 'text',       pagina: 'page',
+            cerrar: 'close',    abrir: 'open',       ver: 'view',
+        };
+
+        // Paso 1: Quitar diacríticos (NFD separa base+acento, luego eliminamos acentos)
+        const noAccents = text
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+
+        // Paso 2: Mapear palabras conocidas ES→EN y normalizar a lowercase sin puntuación
+        return noAccents
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .split(' ')
+            .map(w => ES_TO_EN[w] ?? w)
+            .join(' ');
+    }
+
+    /**
      * Busca el ref de accesibilidad más relevante en el snapshot YAML.
      *
      * El snapshot de @playwright/mcp tiene líneas como:
@@ -244,23 +338,19 @@ export class ScenarioPreviewRunner {
      *   - textbox "Username" [ref=e16]
      *   - link "Home" [ref=e3]
      *
-     * Estrategia:
-     *  1. Para cada línea con [ref=...], extrae el tipo, label y ref
-     *  2. Puntúa la relevancia según palabras clave del descriptor
-     *  3. Retorna el ref de mayor puntaje (o null si no hay coincidencia)
-     */
-    /**
-     * Busca el ref de accesibilidad más relevante en el snapshot YAML.
-     *
-     * Estrategia de puntuación mejorada:
-     *  - Fuerte bonus si el LABEL del elemento es corto y coincide con el needle
-     *    (distingue textbox "Username" de heading "...username..." de longitud 200)
-     *  - Bonus por tipo de elemento inferido del tool name (browser_type → textbox)
-     *  - Penalización por labels muy largos (headings/descriptions)
+     * Estrategia de puntuación:
+     *  - Fuerte bonus si el LABEL del elemento es corto y coincide (distingue
+     *    textbox "Username" de heading "...username..." de longitud 200)
+     *  - Bonus por tipo de elemento inferido del tool name
+     *  - Normalización cross-language: español↔inglés antes de comparar
+     *  - Fallback de "primer input" solo para búsquedas (browser_type_search),
+     *    NO para browser_type genérico (evita tipear en campos equivocados)
      */
     private findRefInSnapshot(snapshotText: string, elementDesc: string, toolHint?: string): string | null {
         const lines = snapshotText.split('\n');
-        const needle = elementDesc.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+        // Normalizar needle: eliminar acentos + mapear ES→EN
+        const needle = this.normalizeForSearch(elementDesc);
         const needleWords = needle.split(/\s+/).filter(w => w.length > 1);
 
         if (needleWords.length === 0) return null;
@@ -272,18 +362,18 @@ export class ScenarioPreviewRunner {
             if (!refMatch) continue;
 
             const ref = refMatch[1];
-            const lineLower = line.toLowerCase();
 
-            // Extraer tipo de rol y label del elemento
+            // Normalizar línea completa y label para comparación cross-language
             const roleMatch = line.match(/^\s*-\s+(\w+)\s+"([^"]+)"/);
             const role = roleMatch ? roleMatch[1].toLowerCase() : '';
-            const labelMatch = line.match(/"([^"]+)"/);
-            const label = labelMatch ? labelMatch[1].toLowerCase() : '';
+            const labelRaw = roleMatch ? roleMatch[2] : (line.match(/"([^"]+)"/)?.[1] ?? '');
+            const label = this.normalizeForSearch(labelRaw);
+            const lineNorm = this.normalizeForSearch(line);
 
             let score = 0;
 
-            // Contar palabras del needle que aparecen en la línea completa
-            const lineMatchCount = needleWords.filter(w => lineLower.includes(w)).length;
+            // Contar palabras del needle que aparecen en la línea normalizada
+            const lineMatchCount = needleWords.filter(w => lineNorm.includes(w)).length;
             if (lineMatchCount === 0) continue;
             score += lineMatchCount * 5;
 
@@ -299,7 +389,7 @@ export class ScenarioPreviewRunner {
                     score += labelMatchCount * 15;
 
                     // Fuerte bonus si el label es CORTO (específico) y coincide bien
-                    // Esto distingue textbox "Username" (corto) de heading "...username..." (largo)
+                    // Distingue textbox "Username" (corto) de heading "...username..." (largo)
                     const labelConciseness = Math.max(0, 1 - label.length / 50);
                     const matchRatio = labelMatchCount / needleWords.length;
                     score += Math.round(50 * labelConciseness * matchRatio);
@@ -310,10 +400,8 @@ export class ScenarioPreviewRunner {
             }
 
             // ── Bonus por tipo de rol según el tool ──────────────────────────
-            if (toolHint === 'browser_type' || toolHint === 'browser_fill') {
-                // combobox y searchbox son inputs válidos (ej: barra de búsqueda de Google)
+            if (toolHint === 'browser_type' || toolHint === 'browser_fill' || toolHint === 'browser_type_search') {
                 if (/^(textbox|input|textarea|searchbox|combobox)/.test(role)) score += 30;
-                // Penalizar roles que no son inputs
                 if (/^(heading|text|paragraph|generic|form|search)$/.test(role)) score -= 20;
             }
             if (toolHint === 'browser_click') {
@@ -324,16 +412,16 @@ export class ScenarioPreviewRunner {
                 if (/^(combobox|listbox|select)/.test(role)) score += 30;
             }
 
-            // ── Bonus genéricos por tipo y keyword ───────────────────────────
+            // ── Bonus genéricos por tipo y keyword (normalizados) ────────────
             if ((needle.includes('button') || needle.includes('boton')) && role === 'button') score += 20;
             if ((needle.includes('field') || needle.includes('input') || needle.includes('campo')) && /textbox|input/.test(role)) score += 20;
             if (needle.includes('link') && role === 'link') score += 15;
             if (needle.includes('checkbox') && role === 'checkbox') score += 15;
-            // Bonus específico para búsqueda: cualquier input en una sección search
-            if ((needle.includes('search') || needle.includes('buscar') || needle.includes('busqueda'))
-                && /^(textbox|combobox|searchbox|input)/.test(role)) score += 25;
 
-            // Bonus: elementos con cursor pointer son generalmente interactivos
+            // Bonus específico para búsqueda (tras normalización: "buscar"→"search")
+            if (needle.includes('search') && /^(textbox|combobox|searchbox|input)/.test(role)) score += 25;
+
+            // Bonus: elementos con cursor pointer son interactivos
             if (line.includes('[cursor=pointer]') && toolHint === 'browser_click') score += 8;
 
             candidates.push({ ref, score, line: line.trim() });
@@ -341,20 +429,21 @@ export class ScenarioPreviewRunner {
 
         // ── Fallback cuando ningún candidato coincide ────────────────────────
         if (candidates.length === 0) {
-            // browser_type → primer input (textbox/combobox/searchbox) de la página
-            if (toolHint === 'browser_type' || toolHint === 'browser_fill') {
+            // browser_type_search → primer input de la página (SOLO para búsquedas)
+            // NO aplica a browser_type genérico para evitar tipear en campos incorrectos
+            if (toolHint === 'browser_type_search') {
                 for (const line of lines) {
                     const refMatch = line.match(/\[ref=(e\d+)\]/);
                     if (!refMatch) continue;
                     if (/^\s*-\s+(textbox|combobox|searchbox|input|textarea)\s/i.test(line)) {
                         const ref = refMatch[1];
-                        console.log(`[PreviewRunner] Fallback browser_type: primer input → ${ref} (${line.trim().substring(0, 60)})`);
+                        console.log(`[PreviewRunner] Fallback browser_type_search: primer input → ${ref} (${line.trim().substring(0, 60)})`);
                         return ref;
                     }
                 }
             }
 
-            // browser_click con "primer/first/segundo/second..." → Nth link/button con cursor:pointer
+            // browser_click con ordinal → Nth link/button con cursor:pointer
             if (toolHint === 'browser_click') {
                 const ordinalMap: Record<string, number> = {
                     primer: 1, primero: 1, first: 1, '1st': 1, '1ro': 1, '1er': 1,
@@ -365,7 +454,6 @@ export class ScenarioPreviewRunner {
                 for (const [word, n] of Object.entries(ordinalMap)) {
                     if (needle.includes(word)) { targetN = n; break; }
                 }
-                // Recopilar todos los links/buttons interactivos
                 const interactive: string[] = [];
                 for (const line of lines) {
                     const refMatch = line.match(/\[ref=(e\d+)\]/);
@@ -379,7 +467,6 @@ export class ScenarioPreviewRunner {
                     console.log(`[PreviewRunner] Fallback browser_click: elemento #${targetN} interactivo → ${ref}`);
                     return ref;
                 }
-                // Si no hay suficientes, devolver el primero disponible
                 if (interactive.length > 0) {
                     console.log(`[PreviewRunner] Fallback browser_click: primer interactivo → ${interactive[0]}`);
                     return interactive[0];

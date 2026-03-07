@@ -43,10 +43,29 @@ export class ScenarioGenerator {
         const lang = LanguageDetector.detect(userRequirement);
         const scorer = new GherkinQualityScorer();
 
-        // Check KB for similar scenarios
+        // ── Deduplicación semántica: reutilizar escenario si Jaccard ≥ 0.5 ─────
+        const similar = await this.kb.findSimilar(userRequirement, 0.5);
+        if (similar.length > 0) {
+            const best = similar[0];
+            const pct = (best.similarity * 100).toFixed(0);
+            console.log(`♻️  Reutilizando escenario existente [ID ${best.id}] (similitud: ${pct}%) — "${best.description}"`);
+            const report = scorer.score(best.gherkin_content, lang);
+            return {
+                gherkin: best.gherkin_content,
+                quality: {
+                    ...report,
+                    issues: [
+                        `♻️ Escenario reutilizado de la base de conocimiento (similitud ${pct}%) — "${best.description}"`,
+                        ...report.issues,
+                    ],
+                },
+            };
+        }
+
+        // Fallback: búsqueda LIKE textual (loggear pero no bloquear)
         const existing = await this.kb.searchScenarios(userRequirement);
         if (existing.length > 0) {
-            console.log('Similar scenarios found in Knowledge Base:');
+            console.log('Escenarios relacionados en KB (similitud Jaccard < 50%, no reutilizados):');
             existing.forEach(s => console.log(`  - [ID ${s.id}] ${s.description}`));
         }
 
