@@ -41,6 +41,7 @@
   },
   "devDependencies": {
     "@cucumber/cucumber": "^10.9.0",
+    "@playwright/mcp": "^0.0.68",
     "@playwright/test": "^1.58.0",
     "@serenity-js/cucumber": "^3.38.0",
     "@serenity-js/serenity-bdd": "^3.38.0",

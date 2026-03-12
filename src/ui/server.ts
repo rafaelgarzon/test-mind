@@ -3,14 +3,21 @@ import cors from 'cors';
 import path from 'path';
 import { ScenarioGenerator } from '../ai/ScenarioGenerator';
 import { OllamaProvider } from '../ai/OllamaProvider';
+import { PreviewAgent } from '../ai/agents/PreviewAgent';
+import { implement } from '../ai/agents/ScenarioImplementer';
+import { createWebMcpRouter, updateUIState } from '../mcp/webmcp-server';
 import { config } from '../config'; // Fase 6 (M-06): validación de entorno al arranque
 
 const app = express();
 const port = config.PORT;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Fase 7.2: Montar servidor MCP HTTP+SSE en /mcp
+app.use('/mcp', createWebMcpRouter());
+console.log(`🔌 MCP SSE endpoint disponible en http://localhost:${config.PORT}/mcp/sse`);
 
 const generator = new ScenarioGenerator();
 const provider = new OllamaProvider();
@@ -36,15 +43,14 @@ app.post('/api/generate', async (req, res) => {
     try {
         const result = await generator.generateScenario(requirement);
         if (result) {
-            res.json({
-                success: true,
-                gherkin: result.gherkin,
-                quality: {
-                    score: result.quality.score,
-                    passed: result.quality.passed,
-                    issues: result.quality.issues,
-                },
-            });
+            const quality = {
+                score: result.quality.score,
+                passed: result.quality.passed,
+                issues: result.quality.issues,
+            };
+            // Fase 7.2: sincronizar estado con WebMCP server
+            updateUIState({ gherkin: result.gherkin, quality });
+            res.json({ success: true, gherkin: result.gherkin, quality });
         } else {
             res.status(500).json({ error: 'Failed to generate scenario or validation failed' });
         }
@@ -61,10 +67,70 @@ app.post('/api/generate-steps', async (req, res) => {
 
     try {
         const steps = await generator.generateStepDefinitions(gherkin);
+        // Fase 7.2: sincronizar steps en estado WebMCP
+        if (steps) updateUIState({ steps });
         res.json({ success: true, steps });
     } catch (e) {
         res.status(500).json({ error: String(e) });
     }
+});
+
+// ─── FASE 7: Preview y Auto-implementación ───────────────────────────────────
+
+/**
+ * POST /api/preview
+ * Ejecuta el escenario Gherkin en un navegador real usando @playwright/mcp
+ * y retorna screenshots + estado de cada paso.
+ * Body: { gherkin: string, steps?: string }
+ */
+app.post('/api/preview', async (req: express.Request, res: express.Response) => {
+    const { gherkin } = req.body;
+    if (!gherkin?.trim()) {
+        return res.status(400).json({ error: 'gherkin is required' });
+    }
+
+    try {
+        const agent = new PreviewAgent();
+        const preview = await agent.preview(gherkin);
+        res.json({ success: true, preview });
+    } catch (err: any) {
+        console.error('[/api/preview] Error:', err.message);
+        res.status(500).json({ error: err.message, details: err.stack?.split('\n')[1] });
+    }
+});
+
+/**
+ * POST /api/implement
+ * Escribe los archivos .feature y .steps.ts al proyecto.
+ * Body: { gherkin: string, steps: string, featureName: string }
+ */
+app.post('/api/implement', async (req: express.Request, res: express.Response) => {
+    const { gherkin, steps, featureName } = req.body;
+    if (!gherkin?.trim() || !steps?.trim() || !featureName?.trim()) {
+        return res.status(400).json({ error: 'gherkin, steps and featureName are required' });
+    }
+
+    try {
+        const result = await implement({ gherkin, steps, featureName });
+        if (result.success) {
+            res.json({ success: true, featurePath: result.featurePath, stepsPath: result.stepsPath });
+        } else {
+            res.status(500).json({ error: result.error });
+        }
+    } catch (err: any) {
+        console.error('[/api/implement] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/state — Fase 7.2
+ * Retorna el estado actual de la UI (último gherkin, steps y quality).
+ * Usado por el WebMCP tool get_scenario_state.
+ */
+app.get('/api/state', (_req, res) => {
+    const { getUIState } = require('../mcp/webmcp-server');
+    res.json(getUIState());
 });
 
 app.listen(port, () => {

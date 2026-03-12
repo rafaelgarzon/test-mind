@@ -3,7 +3,7 @@
  * Es el único cliente Ollama activo. OllamaClient queda deprecado.
  */
 import axios, { AxiosInstance } from 'axios';
-import { AIProvider } from './infrastructure/AIProvider';
+import { AIProvider, Message } from './infrastructure/AIProvider';
 
 export interface OllamaConfig {
     baseUrl: string;
@@ -88,8 +88,25 @@ export class OllamaProvider implements AIProvider {
     }
 
     /**
-     * Fase 6 (M-01): Implementa AIProvider.generate() para que OllamaProvider
-     * sea intercambiable con OpenAIClient en CodeGenerator y otros consumidores.
+     * Fase 8: Context Engineering Support (M-03).
+     * Uses the /api/chat endpoint so the local model understands system/user/assistant boundaries.
+     */
+    async generateChat(messages: Message[]): Promise<string> {
+        try {
+            const response = await this.client.post('/api/chat', {
+                model: this.model,
+                messages: messages.map(m => ({ role: m.role, content: m.content })),
+                stream: false
+            });
+            return response.data.message.content;
+        } catch (error) {
+            console.error('Ollama chat generation failed:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Legacy implementation using /api/generate
      */
     async generate(systemPrompt: string, userPrompt: string): Promise<string> {
         const prompt = `${systemPrompt}\n\nTask: ${userPrompt}`;

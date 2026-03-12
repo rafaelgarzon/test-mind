@@ -3,7 +3,7 @@
  * ahora implementa AIProvider con gestión avanzada de modelos y timeout de 5 min.
  * Este archivo se eliminará en Fase 7.
  */
-import { AIProvider } from "./AIProvider";
+import { AIProvider, Message } from "./AIProvider";
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -15,6 +15,12 @@ export class OllamaClient implements AIProvider {
     constructor(model: string = 'llama3') { // Default to llama3, user can change via env or arg
         this.baseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
         this.model = process.env.AI_MODEL || model;
+    }
+
+    async generateChat(messages: Message[]): Promise<string> {
+        // Obsoleto: Concatenación simple para compatibilidad hacia atrás
+        const prompt = messages.map(m => m.content).join('\n\n');
+        return this.generate('', prompt);
     }
 
     async generate(systemPrompt: string, userPrompt: string): Promise<string> {

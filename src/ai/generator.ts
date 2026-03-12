@@ -6,6 +6,7 @@
 import { CodeGenerator } from './core/CodeGenerator';
 import { OpenAIClient } from './infrastructure/OpenAIClient';
 import { OllamaClient } from './infrastructure/OllamaClient';
+import { AIProvider } from './infrastructure/AIProvider';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -16,7 +17,7 @@ if (require.main === module) {
         console.log("Usage: ts-node src/ai/generator.ts <description> <filename.spec.ts>");
     } else {
         const providerName = process.env.AI_PROVIDER || 'openai';
-        let provider;
+        let provider: AIProvider;
 
         if (providerName.toLowerCase() === 'ollama') {
             console.log("Using AI Provider: Ollama");

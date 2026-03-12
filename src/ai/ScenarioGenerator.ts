@@ -1,13 +1,16 @@
 import { OllamaProvider } from './OllamaProvider';
 import { KnowledgeBase } from '../db/KnowledgeBase';
 import {
-    buildGherkinPrompt,
-    buildRefinementPrompt,
-    SCENARIO_VALIDATION_PROMPT_TEMPLATE,
-    LEARNING_FEEDBACK_PROMPT_TEMPLATE,
+    SYSTEM_ROLE_GHERKIN,
+    DOMAIN_KNOWLEDGE_GHERKIN,
+    buildRefinementSystemPrompt,
+    SCENARIO_VALIDATION_SYSTEM_PROMPT,
+    LEARNING_FEEDBACK_SYSTEM_PROMPT,
+    STEP_DEFINITION_SYSTEM_PROMPT,
 } from './PromptTemplates';
 import { LanguageDetector } from './core/LanguageDetector';
 import { GherkinQualityScorer, QualityReport } from './core/GherkinQualityScorer';
+import { ContextBuilder } from './infrastructure/ContextBuilder';
 
 export class ScenarioGenerator {
     private ollama: OllamaProvider;
@@ -43,10 +46,29 @@ export class ScenarioGenerator {
         const lang = LanguageDetector.detect(userRequirement);
         const scorer = new GherkinQualityScorer();
 
-        // Check KB for similar scenarios
+        // ── Deduplicación semántica: reutilizar escenario si Jaccard ≥ 0.5 ─────
+        const similar = await this.kb.findSimilar(userRequirement, 0.5);
+        if (similar.length > 0) {
+            const best = similar[0];
+            const pct = (best.similarity * 100).toFixed(0);
+            console.log(`♻️  Reutilizando escenario existente [ID ${best.id}] (similitud: ${pct}%) — "${best.description}"`);
+            const report = scorer.score(best.gherkin_content, lang);
+            return {
+                gherkin: best.gherkin_content,
+                quality: {
+                    ...report,
+                    issues: [
+                        `♻️ Escenario reutilizado de la base de conocimiento (similitud ${pct}%) — "${best.description}"`,
+                        ...report.issues,
+                    ],
+                },
+            };
+        }
+
+        // Fallback: búsqueda LIKE textual (loggear pero no bloquear)
         const existing = await this.kb.searchScenarios(userRequirement);
         if (existing.length > 0) {
-            console.log('Similar scenarios found in Knowledge Base:');
+            console.log('Escenarios relacionados en KB (similitud Jaccard < 50%, no reutilizados):');
             existing.forEach(s => console.log(`  - [ID ${s.id}] ${s.description}`));
         }
 
@@ -56,12 +78,30 @@ export class ScenarioGenerator {
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             console.log(`🔄 Attempt ${attempt}/${maxAttempts} (lang: ${lang})`);
 
-            const prompt = attempt === 1
-                ? buildGherkinPrompt(userRequirement, lang)
-                : buildRefinementPrompt(userRequirement, bestGherkin!, bestReport.suggestions, lang);
+            const builder = new ContextBuilder();
+
+            if (attempt === 1) {
+                // Initial generation: System rules + Domain Knowledge (Examples) + User Requirement
+                builder.addSystemPrompt(SYSTEM_ROLE_GHERKIN(lang));
+                builder.addDomainKnowledge(DOMAIN_KNOWLEDGE_GHERKIN(lang));
+
+                // If we found a similar scenario in KB, inject it as Memory File
+                if (similar.length > 0) {
+                    builder.addMemoryFile(`Requirement: "${similar[0].description}"\nScenario:\n${similar[0].gherkin_content}`);
+                }
+
+                builder.addUserMessage(`User Requirement: "${userRequirement}"`);
+            } else {
+                // Refinement: System instructions for fixing + User Requirement + Previous Output + Required Changes
+                builder.addSystemPrompt(buildRefinementSystemPrompt(bestReport.suggestions, lang));
+                builder.addUserMessage(`User Requirement: "${userRequirement}"`);
+                builder.addAssistantMessage(bestGherkin!);
+                builder.addUserMessage('Please fix the issues previously identified.');
+            }
 
             try {
-                const rawResponse = await this.ollama.generateCompletion(prompt);
+                // Use the Context Engineering message array
+                const rawResponse = await this.ollama.generateChat(builder.build());
                 let finalGherkin = rawResponse.trim();
 
                 // FASE 5: Fallback mejorado — extrae nombre semántico en vez de "Generated Feature"
@@ -105,13 +145,22 @@ export class ScenarioGenerator {
             return null;
         }
 
+        // Fase 7: La validación semántica es no-bloqueante — si falla, se agrega
+        // como advertencia en el quality report pero NO bloquea la generación.
+        // Esto permite que el usuario vea el Gherkin generado y lo valide
+        // usando el preview real (ejecución en navegador) antes de implementar.
         const isSemanticallyValid = await this.validateGherkinSemantic(userRequirement, bestGherkin);
         if (!isSemanticallyValid) {
-            console.error('Generated Gherkin is semantically invalid for the requirement.');
-            return null;
+            console.warn('⚠️  Semantic validation returned INVALID — continuing with generated Gherkin (non-blocking).');
+            bestReport = {
+                ...bestReport,
+                issues: [...bestReport.issues, '⚠️ La validación semántica automática tuvo dudas sobre la relevancia. Verifica con Vista Previa.'],
+            };
+            // No guardamos en KB si la validación semántica falla para evitar contaminar futuras búsquedas
+        } else {
+            await this.kb.addScenario(userRequirement, bestGherkin);
         }
 
-        await this.kb.addScenario(userRequirement, bestGherkin);
         return { gherkin: bestGherkin, quality: bestReport };
     }
 
@@ -174,12 +223,13 @@ export class ScenarioGenerator {
 
     private async validateGherkinSemantic(requirement: string, gherkin: string): Promise<boolean> {
         console.log('Validating scenario semantics...');
-        const prompt = SCENARIO_VALIDATION_PROMPT_TEMPLATE
-            .replace('{requirement}', requirement)
-            .replace('{scenario}', gherkin);
+
+        const builder = new ContextBuilder()
+            .addSystemPrompt(SCENARIO_VALIDATION_SYSTEM_PROMPT)
+            .addUserMessage(`User Requirement: "${requirement}"\n\nGenerated Gherkin Scenario:\n"""\n${gherkin}\n"""`);
 
         try {
-            const validationResult = await this.ollama.generateCompletion(prompt);
+            const validationResult = await this.ollama.generateChat(builder.build());
             if (validationResult.trim().toUpperCase().startsWith('VALID')) {
                 return true;
             } else {
@@ -202,12 +252,12 @@ export class ScenarioGenerator {
             }
 
             console.log(`\n🧠 Initiating learning cycle for scenario ID: ${scenarioId}...`);
-            const prompt = LEARNING_FEEDBACK_PROMPT_TEMPLATE
-                .replace('{requirement}', target.description)
-                .replace('{scenario}', target.gherkin_content)
-                .replace('{error}', target.execution_error || 'Unknown execution error.');
 
-            const improvedGherkin = await this.ollama.generateCompletion(prompt);
+            const builder = new ContextBuilder()
+                .addSystemPrompt(LEARNING_FEEDBACK_SYSTEM_PROMPT)
+                .addUserMessage(`User Requirement: "${target.description}"\n\nOriginal Failed Scenario:\n"""\n${target.gherkin_content}\n"""\n\nExecution Error/Feedback:\n"""\n${target.execution_error || 'Unknown execution error.'}\n"""`);
+
+            const improvedGherkin = await this.ollama.generateChat(builder.build());
 
             if (!this.validateGherkinSyntax(improvedGherkin)) {
                 console.error('Improved Gherkin is syntactically invalid.');
@@ -226,11 +276,15 @@ export class ScenarioGenerator {
 
     async generateStepDefinitions(gherkinScenario: string): Promise<string | null> {
         console.log('Generating step definitions...');
-        const { STEP_DEFINITION_PROMPT_TEMPLATE } = await import('./PromptTemplates');
-        const prompt = STEP_DEFINITION_PROMPT_TEMPLATE.replace('{scenario}', gherkinScenario);
+
+        const { STEP_DEFINITION_SYSTEM_PROMPT } = await import('./PromptTemplates');
+
+        const builder = new ContextBuilder()
+            .addSystemPrompt(STEP_DEFINITION_SYSTEM_PROMPT)
+            .addUserMessage(`Gherkin Scenario:\n"${gherkinScenario}"`);
 
         try {
-            const steps = await this.ollama.generateCompletion(prompt);
+            const steps = await this.ollama.generateChat(builder.build());
             return steps;
         } catch (error) {
             console.error('Error generating step definitions:', error);

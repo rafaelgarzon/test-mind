@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import * as dotenv from 'dotenv';
-import { AIProvider } from './AIProvider';
+import { AIProvider, Message } from './AIProvider';
 dotenv.config();
 
 export class OpenAIClient implements AIProvider {
@@ -14,23 +14,27 @@ export class OpenAIClient implements AIProvider {
         this.model = model;
     }
 
-    async generate(systemPrompt: string, userPrompt: string): Promise<string> {
+    async generateChat(messages: Message[]): Promise<string> {
         try {
             const completion = await this.client.chat.completions.create({
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userPrompt }
-                ],
+                messages: messages.map(m => ({ role: m.role, content: m.content })),
                 model: this.model,
             });
 
             let code = completion.choices[0].message.content || '';
-            // Clean markdown code blocks if present
             code = code.replace(/```typescript/g, '').replace(/```/g, '');
             return code;
         } catch (error) {
             console.error("Error communicating with OpenAI:", error);
             throw error;
         }
+    }
+
+    // Legacy support
+    async generate(systemPrompt: string, userPrompt: string): Promise<string> {
+        return this.generateChat([
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+        ]);
     }
 }
