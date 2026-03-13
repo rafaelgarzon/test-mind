@@ -6,8 +6,29 @@
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import * as fs from 'fs';
 import * as path from 'path';
 import { PlaywrightToolExecutor, McpToolResult } from '../ai/agents/ScenarioPreviewRunner';
+
+/**
+ * Resuelve la ruta al binario playwright-mcp subiendo el árbol de directorios
+ * desde __dirname, igual que la resolución de módulos de Node.js.
+ * Esto funciona tanto en el proyecto principal como en worktrees, donde
+ * process.cwd() apunta a un node_modules incompleto.
+ */
+function resolvePlaywrightMcpBin(): string {
+    const binName = process.platform === 'win32' ? 'playwright-mcp.cmd' : 'playwright-mcp';
+    let dir = __dirname;
+    for (let i = 0; i < 8; i++) {
+        const candidate = path.join(dir, 'node_modules', '.bin', binName);
+        if (fs.existsSync(candidate)) return candidate;
+        const parent = path.dirname(dir);
+        if (parent === dir) break; // llegamos a la raíz del filesystem
+        dir = parent;
+    }
+    // Último recurso: asumir que está en el PATH del sistema
+    return 'playwright-mcp';
+}
 
 export interface PlaywrightMcpOptions {
     browser?: 'chromium' | 'firefox' | 'webkit';
@@ -28,8 +49,8 @@ export class PlaywrightMcpClient implements PlaywrightToolExecutor {
         const browser = options.browser ?? 'chromium';
         const headless = options.headless ?? true;
 
-        // Usar el binario local instalado en node_modules
-        const mcpBin = path.resolve(process.cwd(), 'node_modules/.bin/playwright-mcp');
+        // Resolver el binario subiendo el árbol desde __dirname (funciona en worktrees)
+        const mcpBin = resolvePlaywrightMcpBin();
 
         const args: string[] = ['--browser', browser];
         if (headless) args.push('--headless');
