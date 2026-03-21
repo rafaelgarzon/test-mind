@@ -9,7 +9,7 @@ export interface CodeGeneratorRequest extends AgentRequest {
 }
 
 export interface CodeGeneratorResponse extends AgentResponse {
-    tsCode: string; // The generated step definitions code
+    tsCode?: string; // The generated step definitions code
 }
 
 /**
@@ -40,6 +40,8 @@ export class CodeGeneratorAgent implements Agent<CodeGeneratorRequest, CodeGener
                 - SRP (Single Responsibility Principle): Each Task/Question does exactly one thing.
                 - OCP (Open/Closed Principle): Ensure classes are open for extension.
                 - DIP (Dependency Inversion Principle): Rely on Screenplay dependencies and robust locators.
+                
+                CRITICAL INSTRUCTION: You MUST output ONLY raw TypeScript code. Do NOT output JSON. Do not wrap the response in a JSON object. Just provide the TypeScript file content directly.
             `;
             const prompt = ScreenplaySystemPrompt.replace('{{PROJECT_CONTEXT}}', context + '\n' + solidDirectives);
             
@@ -48,17 +50,25 @@ export class CodeGeneratorAgent implements Agent<CodeGeneratorRequest, CodeGener
 
             // 3. Generar Código
             const rawResponse = await this.aiClient.generate(prompt, request.gherkin);
-            let tsCode = '';
+            let tsCode = rawResponse;
             
             try {
-                // Limpiar JSON fallback (si el output viene en Markdown block `json o `ts)
-                const cleanStr = rawResponse.replace(/```(?:json|ts|typescript)/g, '').replace(/```/g, '').trim();
-                const resultJson = JSON.parse(cleanStr);
-                tsCode = resultJson.steps || resultJson.tsCode || cleanStr;
+                // Si el LLM desobedece e incluye un bloque markdown ts, lo extraemos
+                const tsMatch = rawResponse.match(/```(?:ts|typescript)([\s\S]*?)```/);
+                if (tsMatch && tsMatch[1]) {
+                    tsCode = tsMatch[1];
+                } else if (rawResponse.startsWith('{')) {
+                    // Fallback en caso de que siga usando e inyecte JSON
+                    const parsed = JSON.parse(rawResponse);
+                    tsCode = parsed.steps || parsed.tsCode || rawResponse;
+                }
             } catch (e) {
-                // Es posible que el AI entregue código crudo en lugar de JSON
-                tsCode = rawResponse.replace(/```(?:ts|typescript)/g, '').replace(/```/g, '').trim();
+                // Falla silenciosa y asume que toda la respuesta es código TS
+                tsCode = rawResponse.replace(/```(?:ts|typescript|json)?/g, '').trim();
             }
+
+            // Sanitizar saltos de linea perdidos y backticks residuales
+            tsCode = tsCode.replace(/```/g, '').trim();
 
             if (!tsCode) {
                 return { success: false, error: 'La generación del código retornó vacía.' };

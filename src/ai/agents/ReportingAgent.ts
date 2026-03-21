@@ -7,7 +7,7 @@ export interface ReportingRequest extends AgentRequest {
 }
 
 export interface ReportingResponse extends AgentResponse {
-    reportHtml: string;
+    reportHtml?: string;
 }
 
 /**

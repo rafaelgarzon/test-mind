@@ -6,8 +6,8 @@ export interface RequirementsRequest extends AgentRequest {
 }
 
 export interface RequirementsResponse extends AgentResponse {
-    gherkin: string;
-    featureName: string;
+    gherkin?: string;
+    featureName?: string;
 }
 
 /**
