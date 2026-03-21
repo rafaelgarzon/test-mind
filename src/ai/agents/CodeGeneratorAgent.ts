@@ -2,6 +2,7 @@ import { Agent, AgentRequest, AgentResponse } from './Agent';
 import { AIProvider } from '../infrastructure/AIProvider';
 import { ProjectContextLoader } from '../core/ProjectContextLoader';
 import { ScreenplaySystemPrompt } from '../prompts/ScreenplaySystemPrompt';
+import { McpPlaywrightClient } from '../infrastructure/McpPlaywrightClient';
 
 export interface CodeGeneratorRequest extends AgentRequest {
     gherkin: string;
@@ -15,16 +16,18 @@ export interface CodeGeneratorResponse extends AgentResponse {
 /**
  * CodeGeneratorAgent: Transforma Gherkin en código TypeScript (Screenplay + SOLID).
  * - Integra ProjectContextLoader (RAG) para contexto del proyecto.
- * - Integra validación en vivo vía Playwright MCP (futura extensión).
+ * - Integra validación en vivo vía Playwright MCP (Accessibility Tree).
  */
 export class CodeGeneratorAgent implements Agent<CodeGeneratorRequest, CodeGeneratorResponse> {
     readonly name = 'CodeGeneratorAgent';
     private aiClient: AIProvider;
     private contextLoader: ProjectContextLoader;
+    private mcpClient: McpPlaywrightClient | null;
 
-    constructor(aiClient: AIProvider) {
+    constructor(aiClient: AIProvider, mcpClient: McpPlaywrightClient | null = null) {
         this.aiClient = aiClient;
         this.contextLoader = new ProjectContextLoader();
+        this.mcpClient = mcpClient;
     }
 
     async run(request: CodeGeneratorRequest): Promise<CodeGeneratorResponse> {
@@ -46,10 +49,29 @@ export class CodeGeneratorAgent implements Agent<CodeGeneratorRequest, CodeGener
             const prompt = ScreenplaySystemPrompt.replace('{{PROJECT_CONTEXT}}', context + '\n' + solidDirectives);
             
             // [AQUÍ SE IMPLEMENTARÁ LA INTERACCIÓN CON PLAYWRIGHT MCP PARA VALIDAR DOM/SELECTORES]
-            console.log(`[CodeGeneratorAgent] Integración Playwright MCP planificada para validación de selectores in-vivo.`);
+            let domSnapshot = "";
+            if (this.mcpClient) {
+                const urlMatch = request.gherkin.match(/https?:\/\/[^\s"]+/);
+                if (urlMatch) {
+                    const targetUrl = urlMatch[0];
+                    console.log(`[CodeGeneratorAgent] 🌐 URL detectada: ${targetUrl}. Extrayendo Accessibility Tree en vivo...`);
+                    try {
+                        await this.mcpClient.execute('browser_navigate', { url: targetUrl });
+                        await this.mcpClient.execute('browser_wait_for', { time: 3 }); // Espera pasiva de carga
+                        const snapResult = await this.mcpClient.execute('browser_snapshot', {});
+                        const snapshotText = snapResult.content.find((c: any) => c.type === 'text')?.text || '';
+                        if (snapshotText) {
+                            domSnapshot = `\n\n### LIVE BROWSER SNAPSHOT (Accessibility Tree) ###\nUse this snapshot to build robust locators:\n${snapshotText}\n`;
+                            console.log(`[CodeGeneratorAgent] 📸 Snapshot extraído correctamente (${snapshotText.length} bytes).`);
+                        }
+                    } catch (mcpErr) {
+                        console.warn(`[CodeGeneratorAgent] ⚠️ Fallo extrayendo snapshot de la URL:`, mcpErr);
+                    }
+                }
+            }
 
             // 3. Generar Código
-            const rawResponse = await this.aiClient.generate(prompt, request.gherkin);
+            const rawResponse = await this.aiClient.generate(prompt + domSnapshot, request.gherkin);
             let tsCode = rawResponse;
             
             try {

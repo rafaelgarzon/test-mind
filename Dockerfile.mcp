@@ -1,0 +1,8 @@
+FROM mcr.microsoft.com/playwright:v1.42.1-jammy
+
+WORKDIR /mcp
+
+# El servidor de Playwright MCP se ejecutará bajo demanda 
+# insertándose por STDIO desde el cliente Node.js usando `docker exec`
+# Por ahora, simplemente mantenemos el contenedor vivo y funcional.
+CMD ["tail", "-f", "/dev/null"]
