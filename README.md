@@ -60,6 +60,22 @@ npm run ai:web
 ```
 Abre tu navegador en `http://localhost:3000`.
 
+### 📡 Opción 3: Backend RAG Reactivo (Fases 9-11)
+El núcleo de la IA ahora opera tras un Orquestador RAG **Multi-Agente**.
+Puedes interactuar asíncronamente con el modelo usando la API que transmite *Server-Sent Events* mientras los agentes (Requirements, CodeGenerator, Validation) trabajan paso a paso.
+```bash
+# Inicia la infraestructura Docker (Ollama y Playwright MCP)
+docker-compose up -d
+
+# Arranca el API Backend
+npx ts-node src/api/server.ts
+
+# Consulta al Orquestador (Streaming bidireccional)
+curl -N -X POST http://localhost:4000/api/v1/generate-scenario \
+  -H "Content-Type: application/json" \
+  -d '{"userRequirement": "Hacer login"}'
+```
+
 ### 💻 Opción 2: CLI Interactivo y por Lotes
 Usa la interfaz de línea de comandos interactiva. Te permite generar escenarios uno a uno o por lotes (Batch):
 ```bash
