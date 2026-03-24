@@ -33,18 +33,27 @@ export class AgentOrchestrator {
      * Ejecuta el pipeline completo de automatización desde lenguaje natural
      * hasta la implementación en el código (Screenplay/SOLID).
      * @param userRequirement Requerimiento del usuario en lenguaje natural
+     * @param onProgress Función callback para recibir actualizaciones en tiempo real (ideal para SSE)
      */
-    async executePipeline(userRequirement: string): Promise<AgentResponse> {
+    async executePipeline(
+        userRequirement: string, 
+        onProgress?: (agent: string, status: string) => void
+    ): Promise<AgentResponse> {
         try {
-            console.log(`\n🚀 [Orchestrator] Iniciando pipeline para: "${userRequirement}"`);
+            const emit = (agent: string, status: string) => {
+                console.log(`\n[${agent}] ${status}`);
+                if (onProgress) onProgress(agent, status);
+            };
+
+            emit('Orchestrator', `🚀 Iniciando pipeline para: "${userRequirement}"`);
 
             // 1. Requerimientos -> Gherkin
-            console.log(`\n[Orchestrator] 1/5 - Ejecutando Agente de Requerimientos...`);
+            emit('RequirementsAgent', 'Iniciando análisis y generación de Gherkin...');
             const reqResult = await this.requirementsAgent.run({ userRequirement });
             if (!reqResult.success) throw new Error(reqResult.error || 'Fallo en RequirementsAgent');
 
             // 2. Gherkin -> Código (Integrado con Playwright MCP y RAG)
-            console.log(`\n[Orchestrator] 2/5 - Ejecutando Agente Generador de Código...`);
+            emit('CodeGeneratorAgent', 'Generando código TS usando Patrones Screenplay...');
             const codeResult = await this.codeGeneratorAgent.run({
                 gherkin: reqResult.gherkin,
                 featureName: reqResult.featureName,
@@ -52,7 +61,7 @@ export class AgentOrchestrator {
             if (!codeResult.success) throw new Error(codeResult.error || 'Fallo en CodeGeneratorAgent');
 
             // 3. Validación y Previsualización
-            console.log(`\n[Orchestrator] 3/5 - Ejecutando Agente de Validación Preview...`);
+            emit('ValidationAgent', 'Previsualizando escenario iterativo en el DOM...');
             const validationResult = await this.validationAgent.run({
                 gherkin: reqResult.gherkin,
                 tsCode: codeResult.tsCode,
@@ -60,21 +69,21 @@ export class AgentOrchestrator {
             // La validación podría fallar o no, pero el pipeline sigue para reportar
             
             // 4. Reportes
-            console.log(`\n[Orchestrator] 4/5 - Ejecutando Agente de Reportes...`);
+            emit('ReportingAgent', 'Consolidando métricas y capturas en el reporte final...');
             const reportResult = await this.reportingAgent.run({
                 executionData: validationResult.executionData,
                 passed: validationResult.success
             });
-            if (!reportResult.success) console.warn('[Orchestrator] Advertencia: Fallo en ReportingAgent', reportResult.error);
+            if (!reportResult.success) emit('ReportingAgent', '⚠️ Fallo generando el reporte HTML/Markdown.');
 
-            // Si la validación falló, abortar antes de implementar (aunque el reporte ya se haya generado)
+            // Si la validación falló, abortar antes de implementar
             if (!validationResult.success) {
-                console.error(`\n❌ [Orchestrator] Pipeline detenido: El escenario de validación falló.`);
+                emit('Orchestrator', '❌ Pipeline detenido: El escenario de validación falló.');
                 return { success: false, error: validationResult.error };
             }
 
             // 5. Revisión final e Implementación
-            console.log(`\n[Orchestrator] 5/5 - Ejecutando Agente Revisor e Implementador...`);
+            emit('ReviewImplementerAgent', 'Integrando los archivos Gherkin y TS en el framework Base...');
             const implResult = await this.reviewImplementerAgent.run({
                 gherkin: reqResult.gherkin,
                 featureName: reqResult.featureName,
@@ -84,11 +93,12 @@ export class AgentOrchestrator {
 
             if (!implResult.success) throw new Error(implResult.error || 'Fallo en ReviewImplementerAgent');
 
-            console.log(`\n✅ [Orchestrator] Pipeline completado exitosamente.`);
+            emit('Orchestrator', '✅ Pipeline completado exitosamente.');
             return { success: true };
 
         } catch (error: any) {
             console.error(`\n💥 [Orchestrator] Pipeline falló criticamente:`, error);
+            if (onProgress) onProgress('Orchestrator', `💥 Error: ${error.message}`);
             return { success: false, error: error.message };
         }
     }
