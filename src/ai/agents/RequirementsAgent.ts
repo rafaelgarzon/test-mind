@@ -3,6 +3,7 @@ import { ScenarioGenerator } from '../ScenarioGenerator';
 
 export interface RequirementsRequest extends AgentRequest {
     userRequirement: string;
+    businessFeedback?: string;
 }
 
 export interface RequirementsResponse extends AgentResponse {
@@ -31,7 +32,7 @@ export class RequirementsAgent implements Agent<RequirementsRequest, Requirement
             // Ejecuta generación de escenario con evaluación obligatoria de calidad (GherkinQualityScorer)
             // Internamente ScenarioGenerator realiza max 3 intentos de automejora si la calidad no es suficiente.
             console.log(`[RequirementsAgent] Generando Gherkin para: "${request.userRequirement}"`);
-            const result = await this.generator.generateScenario(request.userRequirement, 3);
+            const result = await this.generator.generateScenario(request.userRequirement, 3, request.businessFeedback);
 
             if (!result || !result.gherkin) {
                 return {

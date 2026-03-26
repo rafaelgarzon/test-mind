@@ -106,6 +106,22 @@ export class OllamaProvider implements AIProvider {
     }
 
     /**
+     * Fase 12: Integración de Base Vectorial (ChromaDB)
+     */
+    async generateEmbeddings(prompt: string): Promise<number[]> {
+        try {
+            const response = await this.client.post('/api/embeddings', {
+                model: this.model,
+                prompt: prompt
+            });
+            return response.data.embedding;
+        } catch (error) {
+            console.error('Ollama embeddings generation failed:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Legacy implementation using /api/generate
      */
     async generate(systemPrompt: string, userPrompt: string): Promise<string> {
