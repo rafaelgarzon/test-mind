@@ -30,8 +30,22 @@ services:
       - automation-net
     ipc: host # Importante para Chromium en Docker (evitar crashes de memoria)
 
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - ALLOW_RESET=TRUE
+    restart: unless-stopped
+    networks:
+      - automation-net
+
 volumes:
   ollama_data:
+  chroma_data:
 
 networks:
   automation-net:

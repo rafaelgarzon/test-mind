@@ -38,7 +38,8 @@ export class ScenarioGenerator {
     // ─────────────────────────────────────────────────────────────────────────
     async generateScenario(
         userRequirement: string,
-        maxAttempts: number = 3
+        maxAttempts: number = 3,
+        businessFeedback?: string
     ): Promise<{ gherkin: string; quality: QualityReport } | null> {
 
         console.log(`Generating scenario for: "${userRequirement}"`);
@@ -90,7 +91,13 @@ export class ScenarioGenerator {
                     builder.addMemoryFile(`Requirement: "${similar[0].description}"\nScenario:\n${similar[0].gherkin_content}`);
                 }
 
-                builder.addUserMessage(`User Requirement: "${userRequirement}"`);
+                if (businessFeedback) {
+                    console.log(`\n[ScenarioGenerator] 🧠 Inyectando feedback previo de alineación de negocio...`);
+                    builder.addUserMessage(`Requirement: "${userRequirement}"\n\nATENCIÓN - UN AUDITOR DENEGÓ UN INTENTO PREVIO TUYO CON ESTA RAZÓN:\n"${businessFeedback}"\n\nPor favor, reescribe este Gherkin acatando inquebrantablemente dicha regla corporativa.`);
+                } else {
+                    builder.addUserMessage(`User Requirement: "${userRequirement}"`);
+                }
+
             } else {
                 // Refinement: System instructions for fixing + User Requirement + Previous Output + Required Changes
                 builder.addSystemPrompt(buildRefinementSystemPrompt(bestReport.suggestions, lang));
