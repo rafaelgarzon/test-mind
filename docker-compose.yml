@@ -20,6 +20,16 @@ services:
     #           count: 1
     #           capabilities: [gpu]
 
+  mcp-server:
+    build: 
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: mcp_playwright
+    restart: unless-stopped
+    networks:
+      - automation-net
+    ipc: host # Importante para Chromium en Docker (evitar crashes de memoria)
+
 volumes:
   ollama_data:
 
