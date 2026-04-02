@@ -1,10 +1,15 @@
 /**
- * src/ai/prompts/GherkinToPlaywrightPrompt.ts — Fase 7
+ * src/ai/prompts/GherkinToPlaywrightPrompt.ts — Fase 7 / Fase 8
  *
  * Prompt few-shot que instruye al LLM a traducir pasos Gherkin
  * en acciones de Playwright MCP (JSON array).
+ *
+ * Fase 8: System prompt y Domain Knowledge expuestos como constantes
+ * separadas para que ContextBuilder los ensamble correctamente.
  */
 import { ParsedGherkinStep } from '../core/GherkinStepParser';
+import { Message } from '../infrastructure/AIProvider';
+import { ContextBuilder } from '../infrastructure/ContextBuilder';
 
 export interface TranslatedPlaywrightAction {
     stepIndex: number;
@@ -30,7 +35,8 @@ export const PLAYWRIGHT_MCP_TOOLS = [
 
 export type PlaywrightMcpTool = typeof PLAYWRIGHT_MCP_TOOLS[number];
 
-const SYSTEM_PROMPT = `You are a Playwright automation expert.
+/** Fase 8: System prompt expuesto como constante exportada para ContextBuilder */
+export const GHERKIN_TO_PLAYWRIGHT_SYSTEM_PROMPT = `You are a Playwright automation expert.
 Your task: convert each Gherkin step into a Playwright MCP tool call.
 
 Available tools and their args:
@@ -57,7 +63,8 @@ Rules:
 
 IMPORTANT: Return ONLY a valid JSON array. No markdown fences. No explanation. No extra text.`;
 
-const FEW_SHOT_EXAMPLE = `Example input:
+/** Fase 8: Few-shot example expuesto como Domain Knowledge para ContextBuilder */
+export const GHERKIN_TO_PLAYWRIGHT_DOMAIN_KNOWLEDGE = `Example input:
 [
   { "keyword": "Given", "text": "the user is on \\"https://the-internet.herokuapp.com/login\\"" },
   { "keyword": "When",  "text": "enters \\"tomsmith\\" in the username field" },
@@ -75,6 +82,25 @@ Example output:
   { "stepIndex": 4, "stepText": "should see the message \\"You logged into a secure area!\\"", "toolName": "browser_wait_for", "toolArgs": { "text": "You logged into a secure area!" } }
 ]`;
 
+/**
+ * Fase 8: Ensambla el contexto de traducción usando ContextBuilder.
+ * System rules + Domain Knowledge (few-shot) + User task (steps JSON).
+ */
+export function buildGherkinToPlaywrightMessages(steps: ParsedGherkinStep[]): Message[] {
+    const stepsJson = JSON.stringify(
+        steps.map(s => ({ keyword: s.keyword, text: s.text })),
+        null,
+        2
+    );
+
+    return new ContextBuilder()
+        .addSystemPrompt(GHERKIN_TO_PLAYWRIGHT_SYSTEM_PROMPT)
+        .addDomainKnowledge(GHERKIN_TO_PLAYWRIGHT_DOMAIN_KNOWLEDGE)
+        .addUserMessage(`Now convert these steps:\n${stepsJson}`)
+        .build();
+}
+
+/** @deprecated Usa buildGherkinToPlaywrightMessages con generateChat en su lugar. */
 export function buildGherkinToPlaywrightPrompt(steps: ParsedGherkinStep[]): {
     system: string;
     user: string;
@@ -85,12 +111,9 @@ export function buildGherkinToPlaywrightPrompt(steps: ParsedGherkinStep[]): {
         2
     );
 
-    const user = `${FEW_SHOT_EXAMPLE}
+    const user = `${GHERKIN_TO_PLAYWRIGHT_DOMAIN_KNOWLEDGE}\n\nNow convert these steps:\n${stepsJson}`;
 
-Now convert these steps:
-${stepsJson}`;
-
-    return { system: SYSTEM_PROMPT, user };
+    return { system: GHERKIN_TO_PLAYWRIGHT_SYSTEM_PROMPT, user };
 }
 
 /**
