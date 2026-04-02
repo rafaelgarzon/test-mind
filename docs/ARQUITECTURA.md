@@ -1,8 +1,8 @@
 # Arquitectura del Sistema — Automation Front AI
 
-**Rama activa:** `feature/phase-5-gherkinqa-engine`
-**Última actualización:** 2026-03-03
-**Versión del sistema:** Fase 5 — GherkinQA Engine
+**Rama activa:** `master`
+**Última actualización:** 2026-04-02
+**Versión del sistema:** Fase 13 — Type Safety & Resilience
 
 ---
 
@@ -677,8 +677,89 @@ export const config = EnvSchema.parse(process.env);
 | **3** | Integración IA (multi-proveedor) | `AIProvider`, `OpenAIClient`, `OllamaClient`, `CodeGenerator` | ✅ Completado |
 | **4** | Generación completa con KB y CLI | `ScenarioGenerator` (v1), `KnowledgeBase`, `OllamaProvider`, `PromptTemplates`, MCP, Web UI | ✅ Completado |
 | **5** | Motor de calidad Gherkin | `LanguageDetector`, `GherkinQualityScorer`, `buildGherkinPrompt()`, `buildRefinementPrompt()`, bucle auto-corrección, quality badges | ✅ Completado |
-| **6** | _(propuesto)_ Limpieza técnica + tests unitarios | Eliminar legacy, unificar Ollama, tests para core, búsqueda semántica KB | 🔲 Pendiente |
+| **6** | Limpieza técnica + Config Zod | `config.ts` con Zod, `AIProvider` unificado, `OllamaProvider` como implementación principal | ✅ Completado |
+| **7** | Preview en navegador + WebMCP | `PreviewAgent`, `ScenarioImplementer`, `ScenarioPreviewRunner`, `GherkinStepParser`, `playwright-client.ts`, `webmcp-server.ts` (SSE MCP) | ✅ Completado |
+| **8** | Context Engineering | `ContextBuilder`, `Message[]`, `generateChat()`, alineación de capas de contexto | ✅ Completado |
+| **9** | RAG Multi-Agente | `ProjectContextLoader` con RAG, `AgentOrchestrator` v1 (5 agentes), `KnowledgeBase` extendida | ✅ Completado |
+| **10** | Playwright MCP en Docker | `McpPlaywrightClient` dockerizado, `CodeGeneratorAgent` con snapshot MCP | ✅ Completado |
+| **11** | API Backend SSE | `src/api/server.ts` (puerto 4000), endpoint SSE `/api/v1/generate-scenario` | ✅ Completado |
+| **12** | Business Alignment + ChromaDB | `BusinessAlignmentAgent`, `DuplicatePreventionAgent`, `ChromaVectorStore`, `BusinessDocumentLoader`, `OllamaEmbeddingFunction` | ✅ Completado |
+| **13** | Type Safety & Resilience | `Logger` abstracto, typing fuerte en `AgentOrchestrator`, migración a `generateChat()` en `BusinessAlignmentAgent` y `CodeGeneratorAgent`, análisis estático real en `ReviewImplementerAgent` (tsc --noEmit), resiliencia con retry en `ChromaVectorStore`, script `ai:api` | ✅ Completado |
 
 ---
 
-*Documento generado a partir del análisis directo del código fuente de la rama `feature/phase-5-gherkinqa-engine`.*
+## 12. Pipeline de 7 Agentes (Fase 13)
+
+```
+UserRequirement (lenguaje natural)
+        │
+        ▼
+┌─────────────────────────────────────────────────┐
+│  0. DuplicatePreventionAgent                    │
+│     ChromaDB searchSimilar() → similitud ≥ 0.85 │
+│     → Si duplicado: retorna Gherkin en caché     │
+└────────────────┬────────────────────────────────┘
+                 │ (no duplicado)
+        ┌────────▼────────┐
+        │ Bucle BDD↔Negocio│  máx. 3 intentos
+        │                  │
+        │  1. RequirementsAgent                   │
+        │     NL → Gherkin (ContextBuilder + RAG) │
+        │                                         │
+        │  1.5 BusinessAlignmentAgent             │
+        │     Gherkin × docs/business_context/    │
+        │     → isAligned? Si no: feedback loop   │
+        └──────────────────┘
+                 │ (alineado)
+        ┌────────▼────────────────────────────────┐
+        │  2. CodeGeneratorAgent                  │
+        │     Gherkin → TypeScript (Screenplay)   │
+        │     + Playwright MCP Accessibility Tree │
+        └────────┬────────────────────────────────┘
+                 │
+        ┌────────▼────────────────────────────────┐
+        │  3. ValidationAgent                     │
+        │     Preview en navegador real (MCP)     │
+        │     Screenshot por paso                 │
+        └────────┬────────────────────────────────┘
+                 │
+        ┌────────▼────────────────────────────────┐
+        │  4. ReportingAgent                      │
+        │     Genera reporte Markdown/HTML        │
+        └────────┬────────────────────────────────┘
+                 │ (si validation pasó)
+        ┌────────▼────────────────────────────────┐
+        │  5. ReviewImplementerAgent              │
+        │     tsc --noEmit (análisis estático)    │
+        │     → escribe .feature + .steps.ts      │
+        └────────┬────────────────────────────────┘
+                 │
+        ┌────────▼────────────────────────────────┐
+        │  0b. DuplicatePreventionAgent           │
+        │     saveToCache() → ChromaDB            │
+        └─────────────────────────────────────────┘
+```
+
+## 13. Infraestructura de Logging (Fase 13)
+
+Todos los agentes e infraestructura usan el Logger abstracto:
+
+```typescript
+import { createLogger } from '../infrastructure/Logger';
+
+class MyAgent {
+    private readonly logger = createLogger('MyAgent');
+
+    async run() {
+        this.logger.info('Iniciando...');
+        this.logger.warn('Atención', { detail: '...' });
+        this.logger.error('Fallo', error);
+    }
+}
+```
+
+Control de nivel: variable de entorno `LOG_LEVEL=debug|info|warn|error` (default: `info`).
+
+---
+
+*Documento actualizado el 2026-04-02 desde análisis de la rama `master` (Fase 13).*

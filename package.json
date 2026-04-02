@@ -13,6 +13,7 @@
     "ai:gen": "npx ts-node src/ai/generator.ts",
     "ai:cli": "npx ts-node src/cli/index.ts",
     "ai:web": "npx ts-node src/ui/server.ts",
+    "ai:api": "npx ts-node src/api/server.ts",
     "clean": "rm -rf test-results playwright-report target",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
