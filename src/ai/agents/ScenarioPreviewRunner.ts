@@ -19,7 +19,7 @@
 import { AIProvider } from '../infrastructure/AIProvider';
 import { GherkinStepParser } from '../core/GherkinStepParser';
 import {
-    buildGherkinToPlaywrightPrompt,
+    buildGherkinToPlaywrightMessages,
     parseTranslationResponse,
     heuristicTranslate,
     TranslatedPlaywrightAction,
@@ -499,12 +499,12 @@ export class ScenarioPreviewRunner {
             return heuristicResult;
         }
 
-        // Intentar mejora con LLM con timeout corto
+        // Intentar mejora con LLM con timeout corto (Fase 8: usa generateChat + ContextBuilder)
         try {
-            const { system, user } = buildGherkinToPlaywrightPrompt(steps);
+            const messages = buildGherkinToPlaywrightMessages(steps);
 
             const llmResult = await Promise.race<TranslatedPlaywrightAction[]>([
-                this.ai.generate(system, user).then(raw => parseTranslationResponse(raw, steps)),
+                this.ai.generateChat(messages).then(raw => parseTranslationResponse(raw, steps)),
                 new Promise<never>((_, reject) =>
                     setTimeout(() => reject(new Error('LLM timeout')), LLM_TRANSLATE_TIMEOUT_MS)
                 ),

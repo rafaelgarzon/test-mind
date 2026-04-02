@@ -30,6 +30,7 @@
     "@serenity-js/playwright": "^3.38.0",
     "@serenity-js/web": "^3.38.0",
     "axios": "^1.13.4",
+    "chromadb": "^3.4.0",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
