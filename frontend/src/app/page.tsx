@@ -1,10 +1,9 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSSEPipeline } from '@/hooks/useSSEPipeline';
 import { useImplement } from '@/hooks/useImplement';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { QualityBadge } from '@/components/ui/QualityBadge';
 import { Spinner } from '@/components/ui/Spinner';
 import { Toast } from '@/components/ui/Toast';
 import { AgentTimeline } from '@/components/pipeline/AgentTimeline';
@@ -48,15 +47,20 @@ export default function Dashboard() {
     if (!state.gherkin || !state.tsCode) return;
     const name = state.featureName || 'generated-scenario';
     await impl.run(state.gherkin, state.tsCode, name);
-    if (impl.success) {
-      showToast(`✅ Archivos guardados:\n${impl.featurePath}\n${impl.stepsPath}`);
-    } else if (impl.error) {
+  }, [state, impl]);
+
+  // Toast reactivo: se dispara cuando impl.success/error cambia tras el re-render
+  useEffect(() => {
+    if (impl.success && impl.featurePath) {
+      showToast(`✅ Archivos guardados:\n${impl.featurePath}\n${impl.stepsPath ?? ''}`);
+    }
+  }, [impl.success]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (impl.error) {
       showToast(impl.error, 'error');
     }
-  }, [state, impl, showToast]);
-
-  // Mostrar toast después de implementar
-  const prevImplSuccess = impl.success;
+  }, [impl.error]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pipelineStarted = state.isRunning || state.isDone;
   const hasGherkin      = state.gherkin.length > 0;

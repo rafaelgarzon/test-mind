@@ -12,13 +12,13 @@ export interface AgentEvent {
 }
 
 export const AGENT_ORDER = [
-  'DuplicatePreventionAgent',
   'RequirementsAgent',
+  'DuplicatePreventionAgent',
   'BusinessAlignmentAgent',
   'CodeGeneratorAgent',
   'ValidationAgent',
-  'ReportingAgent',
   'ReviewImplementerAgent',
+  'ScenarioPreviewRunner',
 ] as const;
 
 export type AgentName = (typeof AGENT_ORDER)[number];

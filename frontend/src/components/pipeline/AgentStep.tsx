@@ -2,23 +2,23 @@ import type { AgentState, AgentStatus } from '@/lib/types';
 import { Spinner } from '@/components/ui/Spinner';
 
 const AGENT_ICONS: Record<string, string> = {
-  DuplicatePreventionAgent: '🔍',
   RequirementsAgent:        '📋',
+  DuplicatePreventionAgent: '🔍',
   BusinessAlignmentAgent:   '🏢',
   CodeGeneratorAgent:       '⚙️',
-  ValidationAgent:          '🌐',
-  ReportingAgent:           '📊',
-  ReviewImplementerAgent:   '💾',
+  ValidationAgent:          '✅',
+  ReviewImplementerAgent:   '🔬',
+  ScenarioPreviewRunner:    '🎭',
 };
 
 const AGENT_LABELS: Record<string, string> = {
-  DuplicatePreventionAgent: 'Duplicate Prevention',
   RequirementsAgent:        'Requirements',
+  DuplicatePreventionAgent: 'Duplicate Prevention',
   BusinessAlignmentAgent:   'Business Alignment',
   CodeGeneratorAgent:       'Code Generator',
   ValidationAgent:          'Validation',
-  ReportingAgent:           'Reporting',
-  ReviewImplementerAgent:   'Review & Implement',
+  ReviewImplementerAgent:   'Review & Static Analysis',
+  ScenarioPreviewRunner:    'Scenario Preview (Playwright)',
 };
 
 interface Props { agent: AgentState; index: number; }

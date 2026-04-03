@@ -13,13 +13,13 @@ import type {
 } from '@/lib/types';
 
 const AGENTS: readonly string[] = [
-  'DuplicatePreventionAgent',
   'RequirementsAgent',
+  'DuplicatePreventionAgent',
   'BusinessAlignmentAgent',
   'CodeGeneratorAgent',
   'ValidationAgent',
-  'ReportingAgent',
   'ReviewImplementerAgent',
+  'ScenarioPreviewRunner',
 ];
 
 function initialAgents(): AgentState[] {
@@ -135,7 +135,7 @@ export function useSSEPipeline() {
         }
         if (event.isDuplicate) isDuplicate = true;
 
-        const isBackendDone = event.agent === 'Backend' && event.finished;
+        const isBackendDone = event.agent === 'Backend' && event.finished === true;
         const allDone = isBackendDone || agents.every(a => a.status !== 'running' && a.status !== 'pending');
 
         return {
@@ -146,9 +146,9 @@ export function useSSEPipeline() {
           tsCode,
           previewResult,
           isDuplicate,
-          isRunning: !isBackendDone,
-          isDone: isBackendDone,
-          error: isBackendDone && event.error ? event.error : prev.error,
+          isRunning: !allDone,
+          isDone: allDone,
+          error: event.error ?? prev.error,
         };
       });
     }
