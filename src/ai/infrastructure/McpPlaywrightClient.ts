@@ -14,10 +14,11 @@ export class McpPlaywrightClient implements PlaywrightToolExecutor {
         );
 
         // Conecta mediante stdio a un proceso ejecutado DENTRO del contenedor Docker
-        // Usamos `npx -y @modelcontextprotocol/server-playwright` para levantar el servidor
+        // Paquete correcto: @playwright/mcp (mantenido por el equipo de Playwright)
+        // --headless es obligatorio en Docker (no hay display)
         this.transport = new StdioClientTransport({
             command: "docker",
-            args: ["exec", "-i", "mcp_playwright", "npx", "-y", "@modelcontextprotocol/server-playwright"]
+            args: ["exec", "-i", "mcp_playwright", "npx", "-y", "@playwright/mcp", "--headless"]
         });
     }
 
