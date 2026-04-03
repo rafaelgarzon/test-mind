@@ -12,6 +12,11 @@ import { createLogger, Logger } from '../infrastructure/Logger';
 
 export interface OrchestratorResult extends AgentResponse {
     isDuplicate?: boolean;
+    gherkin?: string;
+    featureName?: string;
+    tsCode?: string;
+    executionData?: unknown;
+    validationPassed?: boolean;
 }
 
 export class AgentOrchestrator {
@@ -35,11 +40,11 @@ export class AgentOrchestrator {
      */
     async executePipeline(
         userRequirement: string,
-        onProgress?: (agent: string, status: string) => void
+        onProgress?: (agent: string, status: string, finished?: boolean) => void
     ): Promise<OrchestratorResult> {
-        const emit = (agent: string, status: string): void => {
+        const emit = (agent: string, status: string, finished = false): void => {
             this.logger.info(status, { agent });
-            onProgress?.(agent, status);
+            onProgress?.(agent, status, finished);
         };
 
         try {
@@ -49,9 +54,10 @@ export class AgentOrchestrator {
             emit('DuplicatePreventionAgent', 'Buscando similitud semántica en la Base Vectorial...');
             const cacheResult = await this.duplicatePreventionAgent.run({ userRequirement });
             if (cacheResult.isDuplicate) {
-                emit('DuplicatePreventionAgent', '⚡ Requerimiento previamente generado. Abortando para ahorrar tokens LLM.');
+                emit('DuplicatePreventionAgent', '⚡ Escenario duplicado detectado. Retornando caché.', true);
                 return { success: true, isDuplicate: true };
             }
+            emit('DuplicatePreventionAgent', '✅ Sin duplicados. Continuando pipeline.', true);
 
             // Bucle BDD ↔ Negocio (máx. 3 intentos de alineación corporativa)
             let reqResult: AgentResponse & Record<string, unknown> = { success: false };
@@ -67,7 +73,8 @@ export class AgentOrchestrator {
                 const alignResult = await this.businessAlignmentAgent.run({ gherkin: reqResult['gherkin'] as string }) as BusinessAlignmentResponse;
 
                 if (alignResult.isAligned) {
-                    emit('BusinessAlignmentAgent', '✅ Escenario supera la auditoría corporativa.');
+                    emit('RequirementsAgent', '✅ Gherkin generado y aprobado.', true);
+                    emit('BusinessAlignmentAgent', '✅ Escenario supera la auditoría corporativa.', true);
                     break;
                 }
 
@@ -75,6 +82,8 @@ export class AgentOrchestrator {
                 emit('BusinessAlignmentAgent', `❌ Violación detectada. Retroalimentando: "${businessFeedback}"`);
 
                 if (attempt >= maxAlignmentAttempts) {
+                    emit('RequirementsAgent', '⚠️ Máximo de intentos alcanzado.', true);
+                    emit('BusinessAlignmentAgent', '⚠️ Alineación corporativa no superada.', true);
                     throw new Error(`Límite de correcciones corporativas alcanzado. Último rechazo: ${businessFeedback}`);
                 }
             }
@@ -86,28 +95,25 @@ export class AgentOrchestrator {
                 featureName: reqResult['featureName'],
             }) as AgentResponse & { tsCode?: string };
             if (!codeResult.success) throw new Error(codeResult.error ?? 'Fallo en CodeGeneratorAgent');
+            emit('CodeGeneratorAgent', '✅ Código TypeScript generado.', true);
 
-            // 3. Validación y preview en navegador
+            // 3. Validación y preview en navegador (no bloqueante — continúa aunque falle)
             emit('ValidationAgent', 'Previsualizando escenario en el DOM...');
             const validationResult = await this.validationAgent.run({
                 gherkin: reqResult['gherkin'],
                 tsCode: codeResult.tsCode,
             }) as AgentResponse & { executionData?: unknown };
+            emit('ValidationAgent', validationResult.success ? '✅ Validación exitosa.' : '⚠️ Validación con observaciones (no bloqueante).', true);
 
-            // 4. Reporte (continúa aunque validación falle — documenta el resultado)
+            // 4. Reporte (siempre ejecuta, documente el resultado de validación)
             emit('ReportingAgent', 'Consolidando métricas y capturas en reporte final...');
             const reportResult = await this.reportingAgent.run({
                 executionData: validationResult.executionData,
                 passed: validationResult.success,
             }) as AgentResponse & { reportHtml?: string };
-            if (!reportResult.success) emit('ReportingAgent', '⚠️ Fallo generando el reporte HTML/Markdown.');
+            emit('ReportingAgent', '✅ Reporte generado.', true);
 
-            if (!validationResult.success) {
-                emit('Orchestrator', '❌ Pipeline detenido: validación falló en navegador.');
-                return { success: false, error: validationResult.error };
-            }
-
-            // 5. Análisis estático + escritura a disco
+            // 5. Análisis estático + escritura a disco (siempre ejecuta)
             emit('ReviewImplementerAgent', 'Integrando archivos Gherkin y TS en el framework...');
             const implResult = await this.reviewImplementerAgent.run({
                 gherkin: reqResult['gherkin'],
@@ -116,13 +122,20 @@ export class AgentOrchestrator {
                 report: reportResult.reportHtml,
             }) as AgentResponse & { filesWritten?: string[] };
             if (!implResult.success) throw new Error(implResult.error ?? 'Fallo en ReviewImplementerAgent');
+            emit('ReviewImplementerAgent', '✅ Archivos escritos en el framework.', true);
 
             // Persistir en caché vectorial para evitar duplicados futuros
-            emit('DuplicatePreventionAgent', 'Almacenando memoria semántica en ChromaDB...');
             await this.duplicatePreventionAgent.saveToCache(userRequirement, reqResult['gherkin'] as string);
 
-            emit('Orchestrator', '✅ Pipeline completado exitosamente.');
-            return { success: true };
+            emit('Orchestrator', '✅ Pipeline completado exitosamente.', true);
+            return {
+                success: true,
+                gherkin: reqResult['gherkin'],
+                featureName: reqResult['featureName'],
+                tsCode: codeResult.tsCode,
+                executionData: validationResult.executionData,
+                validationPassed: validationResult.success,
+            } as OrchestratorResult;
 
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);

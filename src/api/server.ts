@@ -89,8 +89,8 @@ app.post('/api/v1/generate-scenario', async (req: Request, res: Response): Promi
         // 4. Ejecutar Pipeline, pasando el callback para el Streaming de Eventos
         const result = await orchestrator.executePipeline(
             userRequirement,
-            (agent: string, status: string) => {
-                sendEvent({ agent, status });
+            (agent: string, status: string, finished?: boolean) => {
+                sendEvent({ agent, status, finished: finished ?? false });
             }
         );
 

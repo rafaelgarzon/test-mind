@@ -13,13 +13,13 @@ import type {
 } from '@/lib/types';
 
 const AGENTS: readonly string[] = [
-  'RequirementsAgent',
   'DuplicatePreventionAgent',
+  'RequirementsAgent',
   'BusinessAlignmentAgent',
   'CodeGeneratorAgent',
   'ValidationAgent',
+  'ReportingAgent',
   'ReviewImplementerAgent',
-  'ScenarioPreviewRunner',
 ];
 
 function initialAgents(): AgentState[] {
@@ -126,12 +126,13 @@ export function useSSEPipeline() {
         let previewResult = prev.previewResult;
         let isDuplicate = prev.isDuplicate;
 
-        if (event.finished && event.result) {
+        if (event.result) {
           const r = event.result as Record<string, unknown>;
           if (r['gherkin']) gherkin = r['gherkin'] as string;
           if (r['featureName']) featureName = r['featureName'] as string;
           if (r['tsCode']) tsCode = r['tsCode'] as string;
           if (r['executionData']) previewResult = r['executionData'] as PreviewResult;
+          if (r['isDuplicate']) isDuplicate = true;
         }
         if (event.isDuplicate) isDuplicate = true;
 
