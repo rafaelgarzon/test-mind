@@ -1,7 +1,10 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import * as dotenv from 'dotenv';
 import { AgentOrchestrator } from '../ai/core/AgentOrchestrator';
 import { OllamaProvider } from '../ai/OllamaProvider';
+import { OpenAIClient } from '../ai/infrastructure/OpenAIClient';
+import { AIProvider } from '../ai/infrastructure/AIProvider';
 import { McpPlaywrightClient } from '../ai/infrastructure/McpPlaywrightClient';
 import { RequirementsAgent } from '../ai/agents/RequirementsAgent';
 import { CodeGeneratorAgent } from '../ai/agents/CodeGeneratorAgent';
@@ -12,6 +15,8 @@ import { ScenarioPreviewRunner } from '../ai/agents/ScenarioPreviewRunner';
 import { DuplicatePreventionAgent } from '../ai/agents/DuplicatePreventionAgent';
 import { BusinessAlignmentAgent } from '../ai/agents/BusinessAlignmentAgent';
 import { ChromaVectorStore } from '../ai/infrastructure/ChromaVectorStore';
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -39,17 +44,31 @@ app.post('/api/v1/generate-scenario', async (req: Request, res: Response): Promi
     };
 
     let mcpClient: McpPlaywrightClient | null = null;
-    let aiProvider: OllamaProvider | null = null;
+    let ollamaProvider: OllamaProvider | null = null;
+    let aiProvider: AIProvider;
 
     try {
-        sendEvent({ agent: 'Backend', status: 'Iniciando servicios de infraestructura AI...' });
+        const providerName = (process.env.AI_PROVIDER ?? 'ollama').toLowerCase();
+        const ollamaUrl = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
+        const model = process.env.AI_MODEL ?? 'llama3.2';
 
-        // 1. Instanciar Infraestructura Real
-        aiProvider = new OllamaProvider({ baseUrl: 'http://localhost:11434', model: 'llama3.2' });
+        sendEvent({ agent: 'Backend', status: `Iniciando proveedor AI: ${providerName}...` });
+
+        // 1. Instanciar proveedor según variable de entorno
+        if (providerName === 'openai') {
+            aiProvider = new OpenAIClient(process.env.AI_MODEL ?? 'gpt-4o');
+        } else {
+            ollamaProvider = new OllamaProvider({ baseUrl: ollamaUrl, model });
+            aiProvider = ollamaProvider;
+        }
+
         mcpClient = new McpPlaywrightClient();
 
         // 2. Instanciar Agentes
-        const chromaStore = new ChromaVectorStore('http://localhost:8000', aiProvider);
+        // ChromaDB requiere Ollama para embeddings; si el proveedor es OpenAI se usará
+        // el fallback gracioso de ChromaVectorStore (isAvailable=false si falla)
+        const embeddingProvider = ollamaProvider ?? new OllamaProvider({ baseUrl: ollamaUrl, model });
+        const chromaStore = new ChromaVectorStore('http://localhost:8000', embeddingProvider);
         const dupAgent = new DuplicatePreventionAgent(chromaStore);
 
         const reqAgent = new RequirementsAgent();
