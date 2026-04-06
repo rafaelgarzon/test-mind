@@ -89,16 +89,33 @@ export class OllamaProvider implements AIProvider {
 
     /**
      * Fase 8: Context Engineering Support (M-03).
-     * Uses the /api/chat endpoint so the local model understands system/user/assistant boundaries.
+     * Usa streaming NDJSON para evitar timeout en respuestas largas con llama3.2.
+     * Acumula los chunks y devuelve el contenido completo al terminar.
      */
     async generateChat(messages: Message[]): Promise<string> {
         try {
             const response = await this.client.post('/api/chat', {
                 model: this.model,
                 messages: messages.map(m => ({ role: m.role, content: m.content })),
-                stream: false
+                stream: true
+            }, { responseType: 'stream' });
+
+            return new Promise<string>((resolve, reject) => {
+                let accumulated = '';
+                response.data.on('data', (chunk: Buffer) => {
+                    const lines = chunk.toString().split('\n').filter(Boolean);
+                    for (const line of lines) {
+                        try {
+                            const parsed = JSON.parse(line) as { message?: { content?: string }; done?: boolean };
+                            if (parsed.message?.content) {
+                                accumulated += parsed.message.content;
+                            }
+                        } catch { /* línea incompleta — ignorar */ }
+                    }
+                });
+                response.data.on('end', () => resolve(accumulated));
+                response.data.on('error', (err: Error) => reject(err));
             });
-            return response.data.message.content;
         } catch (error) {
             console.error('Ollama chat generation failed:', error);
             throw error;

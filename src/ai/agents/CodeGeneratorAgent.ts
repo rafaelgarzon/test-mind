@@ -8,8 +8,16 @@ import { Agent, AgentRequest, AgentResponse } from './Agent';
 import { AIProvider } from '../infrastructure/AIProvider';
 import { ContextBuilder } from '../infrastructure/ContextBuilder';
 import { ProjectContextLoader } from '../core/ProjectContextLoader';
-import { ScreenplaySystemPrompt } from '../prompts/ScreenplaySystemPrompt';
 import { createLogger, Logger } from '../infrastructure/Logger';
+
+const STEPS_SYSTEM_PROMPT = `You are a Serenity/JS + Cucumber expert.
+Given a Gherkin scenario, output ONLY the TypeScript Step Definitions file.
+Rules:
+- Import from '@cucumber/cucumber': Given, When, Then
+- Import from '@serenity-js/core': actorCalled, actorInTheSpotlight
+- Use actorCalled("Actor").attemptsTo(...) pattern
+- Reuse existing Tasks/UI if listed in CONTEXT
+- Output raw TypeScript only — no markdown fences, no JSON, no explanations`;
 
 export interface CodeGeneratorRequest extends AgentRequest {
     gherkin: string;
@@ -41,21 +49,14 @@ export class CodeGeneratorAgent implements Agent<CodeGeneratorRequest, CodeGener
         try {
             this.logger.info(`Generando código Screenplay para "${request.featureName}"...`);
 
-            // 1. Cargar Contexto RAG del proyecto (UI y Tasks actuales)
+            // 1. Cargar Contexto RAG del proyecto (clases existentes para reutilizar)
             const projectContext = this.contextLoader.loadContext();
+            const systemPrompt = `${STEPS_SYSTEM_PROMPT}\n\nCONTEXT:\n${projectContext}`;
 
-            const systemPrompt = ScreenplaySystemPrompt.replace(
-                '{{PROJECT_CONTEXT}}',
-                projectContext
-            );
-
-            // 2. Generar código usando ContextBuilder + generateChat (Fase 8 pattern)
-            // Nota: el snapshot MCP se omite intencionalmente en este agente —
-            // la navegación real ocurre en ValidationAgent/ScenarioPreviewRunner.
-            // Enviarlo aquí causaba timeouts de 5 min con llama3.2 en páginas grandes.
+            // 2. Generar Step Definitions desde Gherkin (sin navegación MCP)
             const messages = new ContextBuilder()
                 .addSystemPrompt(systemPrompt)
-                .addUserMessage(request.gherkin)
+                .addUserMessage(`Generate step definitions for:\n\n${request.gherkin}`)
                 .build();
 
             const rawResponse = await this.aiClient.generateChat(messages);
