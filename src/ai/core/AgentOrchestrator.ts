@@ -97,6 +97,11 @@ export class AgentOrchestrator {
             if (!codeResult.success) throw new Error(codeResult.error ?? 'Fallo en CodeGeneratorAgent');
             emit('CodeGeneratorAgent', '✅ Código TypeScript generado.', true);
 
+            // Persistir en caché vectorial INMEDIATAMENTE tras generar el Gherkin.
+            // Esto garantiza la detección de duplicados aunque el pipeline falle después.
+            emit('DuplicatePreventionAgent', 'Almacenando Gherkin en memoria semántica...');
+            await this.duplicatePreventionAgent.saveToCache(userRequirement, reqResult['gherkin'] as string);
+
             // 3. Validación y preview en navegador (no bloqueante — continúa aunque falle)
             emit('ValidationAgent', 'Previsualizando escenario en el DOM...');
             const validationResult = await this.validationAgent.run({
@@ -124,8 +129,7 @@ export class AgentOrchestrator {
             if (!implResult.success) throw new Error(implResult.error ?? 'Fallo en ReviewImplementerAgent');
             emit('ReviewImplementerAgent', '✅ Archivos escritos en el framework.', true);
 
-            // Persistir en caché vectorial para evitar duplicados futuros
-            await this.duplicatePreventionAgent.saveToCache(userRequirement, reqResult['gherkin'] as string);
+            // saveToCache ya fue ejecutado tras CodeGenerator (no repetir)
 
             emit('Orchestrator', '✅ Pipeline completado exitosamente.', true);
             return {

@@ -71,11 +71,16 @@ CRITICAL: Output ONLY raw TypeScript code. No JSON, no markdown fences.`;
                         await this.mcpClient.execute('browser_navigate', { url: targetUrl });
                         await this.mcpClient.execute('browser_wait_for', { time: 3 });
                         const snapResult = await this.mcpClient.execute('browser_snapshot', {});
-                        const snapshotText = (snapResult.content as McpContentItem[])
+                        const snapshotRaw = (snapResult.content as McpContentItem[])
                             .find(c => c.type === 'text')?.text ?? '';
-                        if (snapshotText) {
+                        if (snapshotRaw) {
+                            // Limitar a 2500 chars para evitar timeout de Ollama con páginas grandes
+                            const MAX_SNAPSHOT = 2500;
+                            const snapshotText = snapshotRaw.length > MAX_SNAPSHOT
+                                ? snapshotRaw.slice(0, MAX_SNAPSHOT) + '\n... [snapshot truncado]'
+                                : snapshotRaw;
                             domSnapshot = `\n\n### LIVE BROWSER SNAPSHOT (Accessibility Tree) ###\nUse this snapshot to build robust locators:\n${snapshotText}\n`;
-                            this.logger.info(`📸 Snapshot extraído (${snapshotText.length} bytes).`);
+                            this.logger.info(`📸 Snapshot extraído (${snapshotRaw.length} bytes → enviando ${snapshotText.length}).`);
                         }
                     } catch (mcpErr) {
                         this.logger.warn('Fallo extrayendo snapshot de la URL — continuando sin snapshot.', { mcpErr });
