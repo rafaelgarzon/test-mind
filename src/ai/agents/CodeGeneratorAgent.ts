@@ -9,7 +9,6 @@ import { AIProvider } from '../infrastructure/AIProvider';
 import { ContextBuilder } from '../infrastructure/ContextBuilder';
 import { ProjectContextLoader } from '../core/ProjectContextLoader';
 import { ScreenplaySystemPrompt } from '../prompts/ScreenplaySystemPrompt';
-import { McpPlaywrightClient } from '../infrastructure/McpPlaywrightClient';
 import { createLogger, Logger } from '../infrastructure/Logger';
 
 export interface CodeGeneratorRequest extends AgentRequest {
@@ -26,9 +25,6 @@ export interface CodeGeneratorResponse extends AgentResponse {
  * - Integra ProjectContextLoader (RAG) para contexto del proyecto.
  * - Integra validación en vivo vía Playwright MCP (Accessibility Tree).
  */
-/** Tipo interno para el contenido de respuesta MCP */
-interface McpContentItem { type: string; text?: string; }
-
 export class CodeGeneratorAgent implements Agent<CodeGeneratorRequest, CodeGeneratorResponse> {
     readonly name = 'CodeGeneratorAgent';
     private readonly logger: Logger = createLogger(this.name);
@@ -36,7 +32,7 @@ export class CodeGeneratorAgent implements Agent<CodeGeneratorRequest, CodeGener
 
     constructor(
         private readonly aiClient: AIProvider,
-        private readonly mcpClient: McpPlaywrightClient | null = null
+        _mcpClient: unknown = null   // reservado para compatibilidad — no se usa en generación
     ) {
         this.contextLoader = new ProjectContextLoader();
     }
@@ -48,49 +44,17 @@ export class CodeGeneratorAgent implements Agent<CodeGeneratorRequest, CodeGener
             // 1. Cargar Contexto RAG del proyecto (UI y Tasks actuales)
             const projectContext = this.contextLoader.loadContext();
 
-            const solidDirectives = `
-IMPORTANT! The code generated must strictly follow SOLID principles:
-- SRP: Each Task/Question does exactly one thing.
-- OCP: Classes are open for extension.
-- DIP: Rely on Screenplay dependencies and robust locators.
-CRITICAL: Output ONLY raw TypeScript code. No JSON, no markdown fences.`;
-
             const systemPrompt = ScreenplaySystemPrompt.replace(
                 '{{PROJECT_CONTEXT}}',
-                `${projectContext}\n${solidDirectives}`
+                projectContext
             );
 
-            // 2. Extraer snapshot de accesibilidad via Playwright MCP (si disponible)
-            let domSnapshot = '';
-            if (this.mcpClient) {
-                const urlMatch = request.gherkin.match(/https?:\/\/[^\s"]+/);
-                if (urlMatch) {
-                    const targetUrl = urlMatch[0];
-                    this.logger.info(`🌐 URL detectada: ${targetUrl}. Extrayendo Accessibility Tree...`);
-                    try {
-                        await this.mcpClient.execute('browser_navigate', { url: targetUrl });
-                        await this.mcpClient.execute('browser_wait_for', { time: 3 });
-                        const snapResult = await this.mcpClient.execute('browser_snapshot', {});
-                        const snapshotRaw = (snapResult.content as McpContentItem[])
-                            .find(c => c.type === 'text')?.text ?? '';
-                        if (snapshotRaw) {
-                            // Limitar a 2500 chars para evitar timeout de Ollama con páginas grandes
-                            const MAX_SNAPSHOT = 2500;
-                            const snapshotText = snapshotRaw.length > MAX_SNAPSHOT
-                                ? snapshotRaw.slice(0, MAX_SNAPSHOT) + '\n... [snapshot truncado]'
-                                : snapshotRaw;
-                            domSnapshot = `\n\n### LIVE BROWSER SNAPSHOT (Accessibility Tree) ###\nUse this snapshot to build robust locators:\n${snapshotText}\n`;
-                            this.logger.info(`📸 Snapshot extraído (${snapshotRaw.length} bytes → enviando ${snapshotText.length}).`);
-                        }
-                    } catch (mcpErr) {
-                        this.logger.warn('Fallo extrayendo snapshot de la URL — continuando sin snapshot.', { mcpErr });
-                    }
-                }
-            }
-
-            // 3. Generar código usando ContextBuilder + generateChat (Fase 8 pattern)
+            // 2. Generar código usando ContextBuilder + generateChat (Fase 8 pattern)
+            // Nota: el snapshot MCP se omite intencionalmente en este agente —
+            // la navegación real ocurre en ValidationAgent/ScenarioPreviewRunner.
+            // Enviarlo aquí causaba timeouts de 5 min con llama3.2 en páginas grandes.
             const messages = new ContextBuilder()
-                .addSystemPrompt(systemPrompt + domSnapshot)
+                .addSystemPrompt(systemPrompt)
                 .addUserMessage(request.gherkin)
                 .build();
 
