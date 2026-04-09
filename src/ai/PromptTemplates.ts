@@ -20,36 +20,69 @@ NAMING RULES:
 STEP QUALITY RULES:
 - Given: specific URL or concrete precondition with a quoted value derived from the REQUIREMENT
 - When: action with CONCRETE DATA in double quotes extracted from the REQUIREMENT (e.g. types "concrete-value" in the field)
-- Then: verifiable assertion with SPECIFIC expected text from the REQUIREMENT in double quotes
-- Use AND for multiple actions of the same type`;
+- Then: verifiable assertion checking what the user SEES ON SCREEN — text, titles, result lists, messages
+- Use AND for multiple actions of the same type
+
+URL RULES (CRITICAL):
+- NEVER assert a URL unless the requirement EXPLICITLY mentions a URL change or redirect
+- For search scenarios: assert the VISIBLE RESULTS on screen, NOT a URL pattern
+- For navigation scenarios: only assert URL if the requirement says "should be redirected to..."
+- WRONG: And la URL deberia contener "/product/metro-azul"  ← invented URL
+- CORRECT: And deberia ver resultados relacionados con "metro azul"  ← visible content`;
 };
 
 export const DOMAIN_KNOWLEDGE_GHERKIN = (lang: 'es' | 'en' = 'en'): string => {
   if (lang === 'es') {
-    return `Format reference (structure only — do NOT copy the content):
+    return `Ejemplos de referencia (estructura solamente — NO copies el contenido):
 
+--- Ejemplo 1: autenticacion ---
 Requerimiento: "iniciar sesion con credenciales validas"
 Feature: Autenticacion de Usuario
   Scenario: Inicio de sesion exitoso
     Given que el usuario esta en "https://example.com/login"
-    When ingresa "admin" en el campo de usuario
+    When ingresa "admin@example.com" en el campo de correo
     And ingresa "Admin1234!" en el campo de contrasena
     And hace clic en el boton "Ingresar"
     Then deberia ver el mensaje "Bienvenido, admin"
-    And la URL deberia contener "/dashboard"`;
+
+--- Ejemplo 2: busqueda en tienda online ---
+Requerimiento: "buscar producto en tienda y confirmar resultados"
+Feature: Busqueda de Productos
+  Scenario: Busqueda exitosa de producto especifico
+    Given que estoy en "https://tienda.com/"
+    When escribe "camiseta azul" en el campo de buscar
+    And hace clic en el boton de busqueda
+    Then deberia ver en los resultados productos relacionados con "camiseta"
+    And confirme que existe en los resultados un producto con la descripcion "Camiseta Azul"
+
+NOTA: En escenarios de busqueda, los Then verifican el CONTENIDO VISIBLE en pantalla.
+NO agregues verificaciones de URL a menos que el requerimiento lo mencione explicitamente.`;
   }
 
-  return `Format reference (structure only — do NOT copy the content):
+  return `Format references (structure only — do NOT copy content):
 
+--- Example 1: authentication ---
 Requirement: "login with valid credentials"
 Feature: User Authentication
-  Scenario: Successful login with valid credentials
+  Scenario: Successful login
     Given the user is on "https://example.com/login"
-    When the user enters "admin" in the username field
+    When enters "admin@example.com" in the email field
     And enters "Admin1234!" in the password field
     And clicks the "Sign In" button
-    Then the user should see "Welcome, admin"
-    And the URL should contain "/dashboard"`;
+    Then should see the message "Welcome, admin"
+
+--- Example 2: e-commerce search ---
+Requirement: "search for a product and confirm results"
+Feature: Product Search
+  Scenario: Successful product search
+    Given the user is on "https://store.com/"
+    When types "blue shirt" in the search field
+    And clicks the search button
+    Then should see search results related to "shirt"
+    And confirm that a product with description "Blue Shirt" exists in results
+
+NOTE: For search scenarios, Then steps verify VISIBLE CONTENT on screen.
+Do NOT add URL assertions unless the requirement explicitly mentions a redirect.`;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
