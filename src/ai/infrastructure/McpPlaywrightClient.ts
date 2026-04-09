@@ -13,16 +13,16 @@ export class McpPlaywrightClient implements PlaywrightToolExecutor {
             { capabilities: {} }
         );
 
-        // Conecta mediante stdio al contenedor Docker usando el Chromium pre-instalado
-        // de la imagen mcr.microsoft.com/playwright (no Google Chrome comercial).
-        // --executable-path apunta al binario Chromium del contenedor.
+        // Conecta mediante stdio al contenedor Docker usando el Chromium pre-instalado.
+        // @playwright/mcp está instalado globalmente en la imagen (no se descarga via npx).
+        // --executable-path apunta al binario Chromium de la imagen Playwright oficial.
         // --no-sandbox es obligatorio en Docker (sin user namespace).
         // --headless es obligatorio (sin display).
         this.transport = new StdioClientTransport({
             command: "docker",
             args: [
                 "exec", "-i", "mcp_playwright",
-                "npx", "-y", "@playwright/mcp",
+                "playwright-mcp",
                 "--headless",
                 "--no-sandbox",
                 "--executable-path", "/ms-playwright/chromium-1105/chrome-linux/chrome"

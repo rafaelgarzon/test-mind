@@ -2,7 +2,13 @@ FROM mcr.microsoft.com/playwright:v1.42.1-jammy
 
 WORKDIR /mcp
 
-# El servidor de Playwright MCP se ejecutará bajo demanda 
-# insertándose por STDIO desde el cliente Node.js usando `docker exec`
-# Por ahora, simplemente mantenemos el contenedor vivo y funcional.
+# Pre-instalar @playwright/mcp para evitar descarga via npx en cada llamada.
+# Esto elimina la latencia de instalación y evita conflictos de caché.
+RUN npm install -g @playwright/mcp@0.0.70
+
+# tini actúa como PID 1 mínimo — reapea procesos zombie (Chrome, npx, etc.)
+# evitando la acumulación de <defunct> que puede agotar puertos de debug.
+RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["tail", "-f", "/dev/null"]
