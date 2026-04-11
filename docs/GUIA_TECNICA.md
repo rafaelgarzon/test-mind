@@ -13,8 +13,9 @@ y guías de extensión.
 | **Frontend** | Next.js + React + Tailwind v4 | 16.2.1 / 19 |
 | **Backend** | Node.js + Express.js | v18+ / v5 |
 | **Lenguaje** | TypeScript strict mode | 5.x |
-| **IA Local** | Ollama | llama3.2 |
+| **IA Local** | Ollama (Qwen3, Gemma 4, llama3.2) | configurable |
 | **IA Cloud** | OpenAI | gpt-4o |
+| **Embeddings** | bge-m3 (via Ollama) | recomendado |
 | **Vector Store** | ChromaDB | latest |
 | **Browser Automation** | Playwright + MCP | 1.58 |
 | **BDD Framework** | Cucumber + Serenity/JS | 10.9 / 3.38 |
@@ -359,16 +360,55 @@ export const AGENT_ORDER = [
 5. Añade el nombre a `AGENT_ORDER` en `frontend/src/lib/types.ts`
 6. El `AgentTimeline` del dashboard lo mostrará automáticamente
 
-### 7.3 Cambiar el proveedor de IA
+### 7.3 Cambiar el modelo o proveedor de IA
+
+No requiere cambios en el código; la interfaz `AIProvider` lo abstrae.
+
+#### Usar Qwen3 local (recomendado)
 
 ```bash
-# En .env:
+# .env
+AI_PROVIDER=ollama
+AI_MODEL=qwen3:14b        # ajustar según VRAM disponible
+EMBEDDING_MODEL=bge-m3    # mantener estable
+```
+
+Guía de elección por hardware:
+
+| VRAM | Modelo | VRAM usada (Q4) |
+|---|---|---|
+| ≥ 24 GB | `qwen3:32b` | ~20 GB |
+| 16–22 GB | `qwen3:30b-a3b` (MoE) | ~17 GB |
+| 8–14 GB | `qwen3:14b` | ~10 GB |
+| < 8 GB | `qwen3:8b` | ~6 GB |
+
+#### Usar Gemma 4 local
+
+```bash
+AI_PROVIDER=ollama
+AI_MODEL=gemma4:27b        # o gemma4:4b para hardware limitado
+EMBEDDING_MODEL=bge-m3
+```
+
+> Nota: Qwen3 supera a Gemma 4 en generación de TypeScript y bilingüismo ES/EN. Usar Gemma 4 si hay requerimiento específico del ecosistema Google.
+
+#### Usar OpenAI (cloud)
+
+```bash
 AI_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 AI_MODEL=gpt-4o
+EMBEDDING_MODEL=bge-m3    # los embeddings siempre son locales vía Ollama
 ```
 
-No requiere cambios en el código; la interfaz `AIProvider` lo abstrae.
+#### Cambiar el modelo de embeddings
+
+Si se necesita cambiar `EMBEDDING_MODEL`, limpiar ChromaDB primero para evitar vectores inconsistentes:
+
+```bash
+docker-compose down -v chromadb
+docker-compose up -d chromadb
+```
 
 ---
 
