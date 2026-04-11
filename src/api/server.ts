@@ -51,7 +51,9 @@ app.post('/api/v1/generate-scenario', async (req: Request, res: Response): Promi
         const providerName = (process.env.AI_PROVIDER ?? 'ollama').toLowerCase();
         const ollamaUrl = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
         const model = process.env.AI_MODEL ?? 'llama3.2';
-        const embeddingModel = process.env.EMBEDDING_MODEL ?? 'bge-m3';
+        // nomic-embed-text: modelo dedicado de embeddings (768 dim, rápido).
+        // No usar el modelo de chat (llama3.2) para embeddings: lento e ineficiente.
+        const embeddingModel = process.env.EMBEDDING_MODEL ?? 'nomic-embed-text';
 
         sendEvent({ agent: 'Backend', status: `Iniciando proveedor AI: ${providerName}...` });
 
@@ -66,7 +68,7 @@ app.post('/api/v1/generate-scenario', async (req: Request, res: Response): Promi
         mcpClient = new McpPlaywrightClient();
 
         // 2. Instanciar Agentes
-        // Fase 15: embeddingProvider usa EMBEDDING_MODEL (por defecto bge-m3), independiente
+        // embeddingProvider usa EMBEDDING_MODEL (por defecto nomic-embed-text), independiente
         // del modelo de chat. Esto evita inconsistencias en ChromaDB al cambiar AI_MODEL.
         const embeddingProvider = new OllamaProvider({ baseUrl: ollamaUrl, model: embeddingModel });
         const chromaStore = new ChromaVectorStore('http://localhost:8000', embeddingProvider);
