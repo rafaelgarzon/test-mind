@@ -17,7 +17,10 @@ export class ScenarioGenerator {
     private kb: KnowledgeBase;
 
     constructor() {
-        this.ollama = new OllamaProvider();
+        this.ollama = new OllamaProvider({
+            baseUrl: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434',
+            model: process.env.AI_MODEL ?? 'llama3.2',
+        });
         this.kb = new KnowledgeBase();
     }
 

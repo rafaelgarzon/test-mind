@@ -213,13 +213,29 @@ Verás capturas de pantalla, tiempos y el estado de cada paso.
 | El dashboard no carga | `frontend:dev` no está corriendo | `npm run frontend:dev` en terminal separada |
 | Badge "Offline" en rojo | Servidor de UI no responde | `npm run ai:web` |
 | El pipeline no arranca | Servidor de API apagado | `npm run ai:api` |
-| La IA tarda más de 1 minuto | Ollama procesando modelo grande | Esperar; timeout configurado en 5 min |
+| La IA tarda más de 1 minuto | Ollama procesando modelo grande (Qwen3:32b, Gemma 4:27b) | Esperar; timeout configurado en 5 min |
 | Mensaje "Duplicado detectado" | Requerimiento muy similar a uno existente | Hacer el requerimiento más específico |
 | Error en el preview | Playwright MCP no disponible | Verificar `docker-compose up -d` |
+| ChromaDB no detecta duplicados correctamente | Se cambió el modelo de embeddings | Limpiar ChromaDB: `docker-compose down -v chromadb && docker-compose up -d chromadb` |
 
 ---
 
-## 📖 10. Entendiendo Gherkin (para no técnicos)
+## 🤖 10. Modelos de IA disponibles
+
+El sistema usa modelos de IA locales que corren en tu máquina (sin enviar datos a la nube). El modelo se configura en el archivo `.env`.
+
+| Situación | Modelo recomendado | ¿Por qué? |
+|---|---|---|
+| Mejor calidad posible (GPU potente) | `qwen3:32b` | Mayor precisión en código y bilingüismo |
+| Equilibrio calidad/velocidad | `qwen3:14b` | Buena calidad en portátiles con GPU |
+| Recursos limitados | `qwen3:8b` | Mínimo funcional |
+| Sin GPU local | OpenAI `gpt-4o` | Cloud, requiere API key |
+
+> Cambia el modelo editando `AI_MODEL=` en el archivo `.env`. No requiere modificar código.
+
+---
+
+## 📖 11. Entendiendo Gherkin (para no técnicos)
 
 Los escenarios generados siguen el formato **Gherkin**, que es lenguaje natural estructurado:
 

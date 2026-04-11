@@ -13,6 +13,10 @@ const EnvSchema = z.object({
     OPENAI_API_KEY: z.string().optional(),
     OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
     AI_MODEL: z.string().default('llama3.2'),
+    // Fase 15: Modelo de embeddings separado del modelo de chat.
+    // Usar un modelo especializado evita inconsistencias en ChromaDB al cambiar AI_MODEL.
+    // Recomendado: bge-m3 (72% recall) o nomic-embed-text (ligero).
+    EMBEDDING_MODEL: z.string().default('bge-m3'),
     PORT: z.coerce.number().int().positive().default(3000),
     // Fase 7: Preview y auto-implementación
     PREVIEW_BROWSER: z.enum(['chromium', 'firefox', 'webkit']).default('chromium'),

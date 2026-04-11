@@ -1,8 +1,8 @@
 # Arquitectura del Sistema — Automation Front AI
 
 **Rama activa:** `master`
-**Última actualización:** 2026-04-02
-**Versión del sistema:** Fase 14 — Next.js Dashboard & Pipeline Visual
+**Última actualización:** 2026-04-11
+**Versión del sistema:** Fase 15 — Multi-Model Support & Embeddings Desacoplados
 
 ---
 
@@ -51,7 +51,7 @@ Todo el proceso es **observable en tiempo real** desde el Dashboard Next.js vía
 |------|-------------|
 | **Frontend** | Next.js 16.2.1, React 19, Tailwind v4, Geist |
 | **Lenguaje** | TypeScript 5.x (strict mode), Node.js |
-| **IA Local** | Ollama (llama3.2, dockerizado) |
+| **IA Local** | Ollama (Qwen3, Gemma 4, llama3.2 — configurable vía `AI_MODEL`) |
 | **IA Cloud** | OpenAI API (gpt-4o) |
 | **Framework de pruebas** | Serenity/JS 3.38 + Playwright 1.58 + Cucumber 10.9 |
 | **Patrón de pruebas** | Screenplay Pattern |
@@ -529,11 +529,22 @@ Usuario (browser :3001)
 | Variable | Default | Descripción |
 |----------|---------|-------------|
 | `AI_PROVIDER` | `ollama` | `ollama` \| `openai` |
-| `AI_MODEL` | `llama3.2` | Modelo a usar |
+| `AI_MODEL` | `llama3.2` | Modelo de chat (RequirementsAgent, BusinessAlignmentAgent, CodeGeneratorAgent). Recomendado: `qwen3:14b` |
+| `EMBEDDING_MODEL` | `bge-m3` | Modelo de embeddings para ChromaDB. Independiente de `AI_MODEL`. Mantener estable para evitar inconsistencias en vectores. |
 | `OPENAI_API_KEY` | — | Requerido si `AI_PROVIDER=openai` |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | URL de Ollama |
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` |
 | `PORT` | `4000` | Puerto del Pipeline Server |
+
+#### Guía de selección de modelo (`AI_MODEL`)
+
+| VRAM disponible | Modelo recomendado | Notas |
+|---|---|---|
+| ≥ 24 GB | `qwen3:32b` | Máxima calidad: código TS y bilingüismo ES/EN |
+| 16–22 GB | `qwen3:30b-a3b` | MoE: activa solo 3B/token, alta eficiencia |
+| 8–14 GB | `qwen3:14b` | Punto óptimo para portátiles con GPU dedicada |
+| < 8 GB | `qwen3:8b` | Mínimo funcional |
+| Sin GPU local | `gpt-4o` + `AI_PROVIDER=openai` | Cloud, requiere `OPENAI_API_KEY` |
 
 ### Scripts npm disponibles
 
@@ -567,4 +578,5 @@ Usuario (browser :3001)
 | 11 | Vector Dedup | ChromaVectorStore, embeddings Ollama, DuplicatePreventionAgent |
 | 12 | Business Cache | BusinessAlignmentAgent, BusinessDocumentLoader, contexto de dominio |
 | 13 | Type Safety & Resilience | Logger abstraction, `any` eliminado, retry exponencial, `tsc --noEmit` |
-| 14 | **Next.js Dashboard** | **Dashboard React 19 con SSE en tiempo real, 7 agentes visibles** |
+| 14 | Next.js Dashboard | Dashboard React 19 con SSE en tiempo real, 7 agentes visibles |
+| 15 | **Multi-Model Support** | **`EMBEDDING_MODEL` desacoplado, fix ScenarioGenerator hardcode, guía Qwen3/Gemma 4** |

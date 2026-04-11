@@ -2,7 +2,7 @@
 
 Framework de automatización de pruebas front-end impulsado por **IA Multi-Agente**, **Serenity/JS**, **Playwright** y un **Dashboard Next.js** en tiempo real.
 
-> **Estado actual:** Fase 14 completada — Dashboard visual con pipeline de 7 agentes en tiempo real.
+> **Estado actual:** Fase 15 completada — Soporte multi-modelo (Qwen3, Gemma 4, llama3.2) + embeddings desacoplados (bge-m3).
 
 ---
 
@@ -29,9 +29,9 @@ Todo esto es visible en tiempo real en el **Dashboard web** (puerto 3001).
 | **Frontend** | Next.js 16.2.1, React 19, Tailwind v4, Geist |
 | **UI Server (REST)** | Express.js 5, puerto 3000 |
 | **Pipeline Server (SSE)** | Express.js 5, puerto 4000 |
-| **IA Local** | Ollama (llama3.2, dockerizado) |
+| **IA Local** | Ollama (Qwen3, Gemma 4, llama3.2 — configurable) |
 | **IA Cloud** | OpenAI API (gpt-4o) |
-| **Vector Store** | ChromaDB (deduplicación semántica) |
+| **Vector Store** | ChromaDB + bge-m3 (deduplicación semántica) |
 | **Browser Automation** | Playwright MCP (Model Context Protocol) |
 | **Framework de pruebas** | Serenity/JS 3.38 + Playwright 1.58 + Cucumber 10.9 |
 | **Lenguaje** | TypeScript 5.x strict mode, Node.js |
@@ -77,13 +77,20 @@ EOF
 # Proveedor de IA
 AI_PROVIDER=ollama          # 'ollama' | 'openai'
 OPENAI_API_KEY=sk-...       # Solo si AI_PROVIDER=openai
-AI_MODEL=llama3.2           # Modelo a usar
+
+# Modelo de chat (RequirementsAgent, BusinessAlignmentAgent, CodeGeneratorAgent)
+# Recomendaciones según VRAM disponible:
+#   ≥ 24 GB → qwen3:32b   |   16–22 GB → qwen3:30b-a3b
+#   8–14 GB → qwen3:14b   |   < 8 GB   → qwen3:8b
+AI_MODEL=qwen3:14b
+
+# Modelo de embeddings — ChromaDB / deduplicación semántica
+# Mantener estable: cambiar este valor requiere re-indexar ChromaDB
+# Opciones: bge-m3 (72% recall, recomendado) | nomic-embed-text (ligero)
+EMBEDDING_MODEL=bge-m3
 
 # Ollama (si es local sin Docker)
 OLLAMA_BASE_URL=http://localhost:11434
-
-# Logging
-LOG_LEVEL=info              # 'debug' | 'info' | 'warn' | 'error'
 ```
 
 ---
@@ -253,7 +260,8 @@ Automation Front AI/
 | `ERR_CONNECTION_REFUSED` en :3000 o :4000 | Verificar que `npm run ai:web` y `npm run ai:api` estén corriendo |
 | `ERR_CONNECTION_REFUSED` en :3001 | Verificar que `npm run frontend:dev` esté corriendo |
 | `dev:all` falla con "concurrently not found" | `npm install --save-dev concurrently` |
-| Timeout de Ollama (>60s) | Normal para modelos grandes; timeout configurado en 5 min |
+| Timeout de Ollama (>60s) | Normal para modelos grandes (Qwen3:32b, Gemma 4:27b); timeout configurado en 5 min |
+| ChromaDB con vectores inconsistentes | Ocurre al cambiar `EMBEDDING_MODEL`. Ejecutar: `docker-compose down -v chromadb && docker-compose up -d chromadb` |
 | `sqlite3` error en Mac ARM | `npm rebuild sqlite3` |
 | ChromaDB no disponible | El sistema usa fallback gracioso; ChromaDB es opcional |
 | CORS error en el frontend | Verificar `NEXT_PUBLIC_UI_API_URL` y `NEXT_PUBLIC_PIPE_API_URL` en `frontend/.env.local` |
