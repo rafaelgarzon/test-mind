@@ -15,6 +15,7 @@ import { ScenarioPreviewRunner } from '../ai/agents/ScenarioPreviewRunner';
 import { DuplicatePreventionAgent } from '../ai/agents/DuplicatePreventionAgent';
 import { BusinessAlignmentAgent } from '../ai/agents/BusinessAlignmentAgent';
 import { ChromaVectorStore } from '../ai/infrastructure/ChromaVectorStore';
+import { buildDefaultPipeline } from '../ai/pipeline/defaultPipeline';
 
 dotenv.config();
 
@@ -81,10 +82,17 @@ app.post('/api/v1/generate-scenario', async (req: Request, res: Response): Promi
         const repAgent = new ReportingAgent();
         const reviewAgent = new ReviewImplementerAgent();
 
-        // 3. Orquestador
-        const orchestrator = new AgentOrchestrator(
-            dupAgent, alignAgent, reqAgent, codeGenAgent, valAgent, repAgent, reviewAgent
-        );
+        // 3. Construir el pipeline declarativo y el orquestador plug-in
+        const pipelineSteps = buildDefaultPipeline({
+            duplicatePreventionAgent: dupAgent,
+            businessAlignmentAgent: alignAgent,
+            requirementsAgent: reqAgent,
+            codeGeneratorAgent: codeGenAgent,
+            validationAgent: valAgent,
+            reportingAgent: repAgent,
+            reviewImplementerAgent: reviewAgent,
+        });
+        const orchestrator = new AgentOrchestrator(pipelineSteps);
 
         // 4. Ejecutar Pipeline, pasando el callback para el Streaming de Eventos
         const result = await orchestrator.executePipeline(
