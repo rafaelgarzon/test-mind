@@ -2,7 +2,7 @@
 
 Framework de automatización de pruebas front-end impulsado por **IA Multi-Agente**, **Serenity/JS**, **Playwright** y un **Dashboard Next.js** en tiempo real.
 
-> **Estado actual:** Fase 14 completada — Dashboard visual con pipeline de 7 agentes en tiempo real.
+> **Estado actual:** Fase 15 completada — Biblioteca Screenplay completa + arquitectura plug-in PipelineStep.
 
 ---
 
@@ -129,29 +129,41 @@ npm run ai:gen "El usuario hace login con credenciales válidas"
 
 ---
 
-## 🤖 Pipeline de 7 Agentes
+## 🤖 Pipeline de 7 Pasos (Plug-in Architecture)
 
-El sistema orquesta 7 agentes especializados en secuencia, todos visibles en tiempo real:
+El sistema usa una arquitectura de **pipeline plug-in**: cada agente está
+envuelto en un `PipelineStep` que lee y escribe un `PipelineContext`
+compartido. Para agregar o quitar un paso solo se edita `defaultPipeline.ts`.
 
 ```
-[1] RequirementsAgent       — Analiza y estructura el requerimiento
+[1] DuplicatePreventionStep — Búsqueda semántica en ChromaDB → ShortCircuit si cache hit
       ↓
-[2] DuplicatePreventionAgent — Búsqueda semántica en ChromaDB (vectores)
+[2] RequirementsStep        — Genera Gherkin + loop BusinessAlignment (máx. 3)
       ↓
-[3] BusinessAlignmentAgent  — Valida alineación con contexto de negocio
+[3] CodeGeneratorStep       — Genera TypeScript Screenplay (usa ProjectContextLoader RAG)
       ↓
-[4] CodeGeneratorAgent      — Genera Gherkin + TypeScript Screenplay
+[4] PersistToCacheStep      — Guarda Gherkin en ChromaDB
       ↓
-[5] ValidationAgent         — Score de calidad Gherkin (≥ 70/100)
+[5] ValidationStep          — Preview headless con Playwright MCP (no bloqueante)
       ↓
-[6] ReviewImplementerAgent  — Análisis estático TypeScript (tsc --noEmit)
+[6] ReportingStep           — Genera reporte Markdown
       ↓
-[7] ScenarioPreviewRunner   — Preview headless con Playwright MCP
+[7] ReviewImplementerStep   — tsc --noEmit + escritura .feature + .steps.ts
       ↓
-   Resultado: .feature + .steps.ts listos para integrar
+   Resultado: archivos listos para integrar en la suite de pruebas
 ```
 
-Cada agente emite eventos SSE en tiempo real, visibles en el dashboard.
+Cada paso emite eventos SSE en tiempo real, visibles en el dashboard.
+
+## 📚 Biblioteca Screenplay
+
+Step definitions generados por la IA usan clases Serenity/JS reales:
+
+| Capa | Módulos | Ejemplo |
+|------|---------|---------|
+| **Tasks** | `NavigateToPage`, `SearchForItem`, `AddProductToCart`, `OpenShoppingCart`, `FillField`, `ClickButton`, `SelectDropdownOption` | `actorCalled('user').attemptsTo(SearchForItem.called('laptop'))` |
+| **UI** | `NavigationUI`, `SearchUI`, `ProductListUI`, `CartUI`, `FormUI`, `LoginUI` | `CartUI.cartItemByName('Winter Top')` |
+| **Questions** | `TextOf`, `CountOf`, `IsVisible`, `CurrentUrl`, `ElementExists` | `Ensure.that(TextOf.element(el), equals('Hola'))` |
 
 ---
 
@@ -210,32 +222,29 @@ Automation Front AI/
 │
 ├── src/
 │   ├── ai/
-│   │   ├── agents/              # 10 agentes especializados
-│   │   │   ├── RequirementsAgent.ts
-│   │   │   ├── DuplicatePreventionAgent.ts
-│   │   │   ├── BusinessAlignmentAgent.ts
-│   │   │   ├── CodeGeneratorAgent.ts
-│   │   │   ├── ValidationAgent.ts
-│   │   │   ├── ReviewImplementerAgent.ts
-│   │   │   ├── ScenarioPreviewRunner.ts
-│   │   │   └── ... (ReportingAgent, ScenarioImplementer, PreviewAgent)
+│   │   ├── agents/              # Agentes especializados del pipeline
 │   │   ├── core/
-│   │   │   ├── AgentOrchestrator.ts     # Orquestador central
-│   │   │   ├── GherkinQualityScorer.ts  # Score 0-100
-│   │   │   └── LanguageDetector.ts      # Detección ES/EN
+│   │   │   ├── AgentOrchestrator.ts     # Orquestador plug-in (PipelineStep[])
+│   │   │   ├── PipelineStep.ts          # Interfaz + PipelineContext (blackboard)
+│   │   │   ├── ProjectContextLoader.ts  # RAG: firmas de Screenplay → LLM
+│   │   │   └── GherkinQualityScorer.ts  # Score 0-100
+│   │   ├── pipeline/
+│   │   │   ├── defaultPipeline.ts       # Factory: agents → PipelineStep[]
+│   │   │   └── steps/                   # 7 PipelineSteps concretos
 │   │   └── infrastructure/
-│   │       ├── AIProvider.ts            # Interfaz unificada
-│   │       ├── OllamaClient.ts          # Cliente Ollama
-│   │       ├── OpenAIClient.ts          # Cliente OpenAI
-│   │       ├── ChromaVectorStore.ts     # Deduplicación semántica
-│   │       ├── ContextBuilder.ts        # Construcción de mensajes chat
-│   │       ├── Logger.ts                # Logger abstraction
-│   │       └── McpPlaywrightClient.ts   # Browser MCP
+│   │       ├── AIProvider.ts            # Interfaz unificada (DIP)
+│   │       ├── ChromaVectorStore.ts     # Vector store + retry
+│   │       ├── ContextBuilder.ts        # Builder de mensajes chat
+│   │       └── Logger.ts                # Logger abstraction
 │   │
 │   ├── api/server.ts            # Pipeline SSE server (puerto 4000)
 │   ├── ui/server.ts             # UI REST server (puerto 3000)
 │   ├── cli/index.ts             # CLI interactivo (Inquirer.js)
-│   └── screenplay/              # Código de pruebas (Serenity/JS)
+│   └── screenplay/              # Biblioteca Screenplay (Serenity/JS)
+│       ├── tasks/               # 8 Tasks de negocio reutilizables
+│       ├── ui/                  # 6 módulos de UI locators
+│       ├── questions/           # 5 Questions para assertions
+│       └── index.ts             # Barrel re-export
 │
 ├── features/                    # Especificaciones BDD (Cucumber)
 ├── docs/                        # Documentación técnica y de usuario

@@ -1,8 +1,8 @@
 # Arquitectura del Sistema — Automation Front AI
 
 **Rama activa:** `master`
-**Última actualización:** 2026-04-02
-**Versión del sistema:** Fase 14 — Next.js Dashboard & Pipeline Visual
+**Última actualización:** 2026-04-21
+**Versión del sistema:** Fase 15 — Screenplay Library & Plug-in Pipeline Architecture
 
 ---
 
@@ -39,6 +39,7 @@ Todo el proceso es **observable en tiempo real** desde el Dashboard Next.js vía
 |-----------|---------------|
 | **Separación de responsabilidades** | 5 capas independientes + capa frontend |
 | **Dependency Inversion** | Interfaz `AIProvider` con implementaciones Ollama/OpenAI |
+| **Open/Closed (OCP)** | Pipeline extensible via `PipelineStep[]` — nuevo paso ≠ editar orquestador |
 | **Calidad garantizada** | Scoring + bucle de auto-corrección (máx. 3 intentos) |
 | **Observabilidad** | Logger abstraction + SSE streaming a dashboard |
 | **Resiliencia** | ChromaVectorStore con retry exponencial + fallback gracioso |
@@ -116,12 +117,25 @@ Automation Front AI/
 │   │   │   └── PreviewAgent.ts        # Agente de preview alternativo
 │   │   │
 │   │   ├── core/
-│   │   │   ├── AgentOrchestrator.ts   # Orquestador central del pipeline
+│   │   │   ├── AgentOrchestrator.ts   # Orquestador plug-in (consume PipelineStep[])
+│   │   │   ├── PipelineStep.ts        # Interfaz PipelineStep + PipelineContext (blackboard)
+│   │   │   ├── ProjectContextLoader.ts # RAG: extrae firmas + ejemplos de Screenplay lib
 │   │   │   ├── DuplicateDetector.ts   # Detección Jaccard (legacy)
 │   │   │   ├── GherkinQualityScorer.ts # Score 0-100, 5 reglas
 │   │   │   ├── GherkinStepParser.ts   # Parser de pasos Gherkin
-│   │   │   ├── LanguageDetector.ts    # Detección ES/EN
-│   │   │   └── ProjectContextLoader.ts
+│   │   │   └── LanguageDetector.ts    # Detección ES/EN
+│   │   │
+│   │   ├── pipeline/                  # Pasos concretos del pipeline plug-in
+│   │   │   ├── defaultPipeline.ts     # Factory declarativa: agents → PipelineStep[]
+│   │   │   └── steps/
+│   │   │       ├── DuplicatePreventionStep.ts
+│   │   │       ├── RequirementsStep.ts     # Incluye loop BusinessAlignment
+│   │   │       ├── CodeGeneratorStep.ts
+│   │   │       ├── PersistToCacheStep.ts
+│   │   │       ├── ValidationStep.ts
+│   │   │       ├── ReportingStep.ts
+│   │   │       ├── ReviewImplementerStep.ts
+│   │   │       └── index.ts
 │   │   │
 │   │   ├── infrastructure/
 │   │   │   ├── AIProvider.ts          # Interfaz unificada (DIP)
@@ -153,10 +167,34 @@ Automation Front AI/
 │   ├── cli/
 │   │   └── index.ts                   # CLI interactivo (Inquirer.js)
 │   │
-│   └── screenplay/                    # Código de pruebas Serenity/JS
-│       ├── actors/Cast.ts
-│       ├── tasks/Login.ts
-│       └── ui/LoginUI.ts
+│   └── screenplay/                    # Biblioteca Screenplay (Serenity/JS)
+│       ├── actors/Cast.ts             # Configura BrowseTheWebWithPlaywright
+│       ├── tasks/                     # Tareas de negocio reutilizables
+│       │   ├── Login.ts               # Login.withCredentials(user, pass)
+│       │   ├── NavigateToPage.ts      # NavigateToPage.at(url)
+│       │   ├── SearchForItem.ts       # SearchForItem.called(query)
+│       │   ├── AddProductToCart.ts    # AddProductToCart.named(product)
+│       │   ├── OpenShoppingCart.ts    # OpenShoppingCart.fromModal/fromHeader
+│       │   ├── FillField.ts          # FillField.byLabel(label, value)
+│       │   ├── SelectDropdownOption.ts # SelectDropdownOption.named(opt)
+│       │   ├── ClickButton.ts        # ClickButton.labeled(name)
+│       │   └── index.ts
+│       ├── ui/                        # Localizadores de PageElement
+│       │   ├── LoginUI.ts
+│       │   ├── NavigationUI.ts        # header, navLink, pageHeading
+│       │   ├── SearchUI.ts            # searchField, searchButton, resultItems
+│       │   ├── ProductListUI.ts       # productByName, addToCartButton, section
+│       │   ├── CartUI.ts              # cartItems, viewCartButton, cartTotal
+│       │   ├── FormUI.ts              # fieldByLabel, buttonByName, dropdownByLabel
+│       │   └── index.ts
+│       ├── questions/                 # Questions para assertions
+│       │   ├── TextOf.ts             # TextOf.element(el)
+│       │   ├── CountOf.ts            # CountOf.elements(els)
+│       │   ├── IsVisible.ts          # IsVisible.onScreen()
+│       │   ├── CurrentUrl.ts         # CurrentUrl.href()
+│       │   ├── ElementExists.ts      # ElementExists.in(el)
+│       │   └── index.ts
+│       └── index.ts                   # Barrel re-export
 │
 ├── features/                          # Especificaciones BDD (Cucumber)
 │   ├── login.feature
@@ -202,16 +240,26 @@ Automation Front AI/
 ║                      CAPA DE APLICACIÓN                              ║
 ║                  ┌───────────────────────────┐                       ║
 ║                  │      AgentOrchestrator     │                       ║
-║                  │  Coordina 7 agentes en     │                       ║
-║                  │  secuencia, emite eventos  │                       ║
-║                  │  SSE por cada transición   │                       ║
+║                  │  Itera PipelineStep[] en   │                       ║
+║                  │  secuencia; cada paso lee  │                       ║
+║                  │  y escribe PipelineContext │                       ║
+║                  │  (blackboard pattern).     │                       ║
 ║                  └─────────────┬─────────────┘                       ║
+║                                │                                      ║
+║           ┌────────────────────┴────────────────────┐                ║
+║           │         defaultPipeline.ts               │                ║
+║           │  Factory: agents → PipelineStep[]        │                ║
+║           └──────────────────────────────────────────┘                ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║                      CAPA DE DOMINIO (AGENTES)                       ║
+║                      CAPA DE DOMINIO (PIPELINE STEPS)                ║
 ║  ┌─────────────────────────────────────────────────────────────────┐ ║
-║  │  [1]Requirements → [2]Duplicate → [3]BusinessAlignment          │ ║
-║  │         → [4]CodeGenerator → [5]Validation                      │ ║
-║  │                → [6]ReviewImplementer → [7]ScenarioPreview       │ ║
+║  │  [1]DuplicatePreventionStep → [2]RequirementsStep               │ ║
+║  │         (con loop BusinessAlignment) → [3]CodeGeneratorStep     │ ║
+║  │         → [4]PersistToCacheStep → [5]ValidationStep             │ ║
+║  │         → [6]ReportingStep → [7]ReviewImplementerStep           │ ║
+║  │                                                                  │ ║
+║  │  Cada step implementa: PipelineStep.execute(ctx, progress)      │ ║
+║  │  Retorna: Continue | ShortCircuit | Abort                       │ ║
 ║  └─────────────────────────────────────────────────────────────────┘ ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║                    CAPA DE INFRAESTRUCTURA                           ║
@@ -248,72 +296,102 @@ Automation Front AI/
 
 ---
 
-## 4. Pipeline Multi-Agente
+## 4. Pipeline Multi-Agente (Plug-in Architecture)
 
-### Flujo completo del AgentOrchestrator
+### Arquitectura plug-in: PipelineStep
+
+El pipeline ya no está hardcodeado dentro de `AgentOrchestrator`. Cada agente
+está envuelto en un `PipelineStep` que lee y escribe un `PipelineContext`
+compartido (blackboard pattern). El orquestador es genérico: itera
+`PipelineStep[]` y reacciona al `StepOutcome` que cada paso retorna.
+
+```typescript
+// Contrato de cada paso del pipeline
+interface PipelineStep {
+  readonly name: string;
+  execute(context: PipelineContext, progress: ProgressReporter): Promise<StepOutcome>;
+}
+
+// StepOutcome = Continue | ShortCircuit(reason) | Abort(reason, error?)
+```
+
+Para agregar o quitar un paso solo se edita `defaultPipeline.ts` — el
+orquestador no cambia (OCP).
+
+### Flujo completo
 
 ```
 POST /api/v1/generate-scenario
   { userRequirement: "..." }
          │
-         ▼ SSE: { event: 'agent_start', agent: 'requirements' }
+         ▼  buildDefaultPipeline(agents) → PipelineStep[]
+         │  AgentOrchestrator itera cada step
+         │
 ┌─────────────────────────────────────┐
-│  [1] RequirementsAgent              │
-│  Analiza y estructura el texto del  │
-│  requerimiento, extrae entidades.   │
+│  [1] DuplicatePreventionStep        │  → ShortCircuit si cache hit
+│  ChromaDB embeddings (nomic-embed)  │
 └─────────────────┬───────────────────┘
-                  │ SSE: { event: 'agent_done', agent: 'requirements', ... }
+                  │ Continue
                   ▼
 ┌─────────────────────────────────────┐
-│  [2] DuplicatePreventionAgent       │
-│  Consulta ChromaDB con embeddings.  │
-│  Si similarity > umbral → STOP      │
-│  (emite isDuplicate: true)          │
+│  [2] RequirementsStep               │  ← incluye loop con
+│  RequirementsAgent + BusinessAlign  │    BusinessAlignmentAgent
+│  (máx. 3 intentos de alineación)   │    (máx. 3 intentos)
+└─────────────────┬───────────────────┘
+                  │ ctx.gherkin + ctx.featureName
+                  ▼
+┌─────────────────────────────────────┐
+│  [3] CodeGeneratorStep              │
+│  ContextBuilder + ProjectContextLoader
+│  Genera TypeScript Screenplay       │
+└─────────────────┬───────────────────┘
+                  │ ctx.tsCode
+                  ▼
+┌─────────────────────────────────────┐
+│  [4] PersistToCacheStep             │
+│  Guarda Gherkin en ChromaDB         │
+│  (antes de validación por si falla) │
 └─────────────────┬───────────────────┘
                   │
                   ▼
 ┌─────────────────────────────────────┐
-│  [3] BusinessAlignmentAgent         │
-│  Valida que el req. sea coherente   │
-│  con el contexto de negocio cargado │
-│  desde docs/business_context/.      │
+│  [5] ValidationStep                 │  no bloqueante
+│  Preview Playwright MCP en headless │
 └─────────────────┬───────────────────┘
-                  │
+                  │ ctx.executionData + ctx.validationPassed
                   ▼
 ┌─────────────────────────────────────┐
-│  [4] CodeGeneratorAgent             │
-│  Llama a OllamaClient/OpenAIClient  │
-│  via ContextBuilder.buildMessages() │
-│  Genera: Gherkin + TypeScript       │
+│  [6] ReportingStep                  │
+│  Genera reporte Markdown/HTML       │
 └─────────────────┬───────────────────┘
-                  │
+                  │ ctx.reportHtml
                   ▼
 ┌─────────────────────────────────────┐
-│  [5] ValidationAgent                │
-│  GherkinQualityScorer (0-100)       │
-│  Si score < 70 → refinement loop   │
-│  máx. 3 intentos                   │
+│  [7] ReviewImplementerStep          │
+│  tsc --noEmit + escritura a disco   │
+│  (.feature + .steps.ts)            │
 └─────────────────┬───────────────────┘
-                  │
-                  ▼
-┌─────────────────────────────────────┐
-│  [6] ReviewImplementerAgent         │
-│  Escribe temp file → tsc --noEmit  │
-│  Errores TS = warnings (no bloquea)│
-│  Cleanup en finally                │
-└─────────────────┬───────────────────┘
-                  │
-                  ▼
-┌─────────────────────────────────────┐
-│  [7] ScenarioPreviewRunner          │
-│  buildGherkinToPlaywrightMessages() │
-│  ContextBuilder → generateChat()    │
-│  McpPlaywrightClient.runScenario()  │
-│  Captura screenshots por paso      │
-└─────────────────┬───────────────────┘
-                  │
-                  ▼ SSE: { event: 'pipeline_done', gherkin, tsCode, preview }
+                  │ ctx.filesWritten
+                  ▼ SSE: { finished: true, result }
          Response stream ends
+```
+
+### PipelineContext (blackboard)
+
+```typescript
+interface PipelineContext {
+  readonly userRequirement: string;
+  gherkin?: string;         // Set by RequirementsStep
+  featureName?: string;     // Set by RequirementsStep
+  tsCode?: string;          // Set by CodeGeneratorStep
+  executionData?: PreviewResult; // Set by ValidationStep
+  validationPassed?: boolean;    // Set by ValidationStep
+  reportHtml?: string;           // Set by ReportingStep
+  filesWritten?: string[];       // Set by ReviewImplementerStep
+  isDuplicate?: boolean;         // Set by DuplicatePreventionStep
+  businessFeedback?: string;     // Set by RequirementsStep (loop)
+  extras: Record<string, unknown>;
+}
 ```
 
 ### Eventos SSE emitidos
@@ -386,12 +464,40 @@ interface Logger {
 
 ### 5.2 Core
 
-#### `AgentOrchestrator` — Coordinador del pipeline (Phase 9+)
+#### `AgentOrchestrator` — Coordinador plug-in del pipeline (Phase 15)
 
-- Tipo-safe: usa tipos concretos `DuplicatePreventionAgent`, `BusinessAlignmentAgent`
-- Sin `any`: eliminado totalmente en Phase 13
-- Bucle de alineación: `for` loop (máx. 3 intentos) en lugar de `while`
+```typescript
+class AgentOrchestrator {
+  constructor(steps: PipelineStep[])        // recibe array de pasos
+  executePipeline(requirement, onProgress?) // API pública idéntica a SSE
+}
+```
+
+- **No conoce agentes concretos** — solo itera `PipelineStep[]` (OCP)
+- Cada paso retorna `Continue`, `ShortCircuit` o `Abort`
 - Logger integrado: `createLogger('Orchestrator')`
+- Excepciones no controladas en un paso se convierten en `Abort` automáticamente
+
+#### `PipelineStep` + `PipelineContext` — Contratos plug-in (Phase 15)
+
+- `PipelineStep.execute(ctx, progress)` es la única firma que un nuevo paso debe implementar
+- `PipelineContext` es el blackboard compartido: cada paso lee y escribe
+- `ProgressReporter` abstrae los eventos SSE — tests no necesitan mock de Express
+- `defaultPipeline.ts` define el orden: DuplicateP → Requirements → CodeGen → Cache → Validation → Reporting → ReviewImpl
+
+#### `ProjectContextLoader` — RAG del Screenplay (Phase 15)
+
+Escanea `src/screenplay/{tasks,ui,questions}` y genera un bloque de contexto
+con firmas completas y ejemplos de uso para que el LLM use clases reales.
+
+```typescript
+const loader = new ProjectContextLoader();
+const context = loader.loadContext();
+// → "### EXISTING SCREENPLAY LIBRARY (REUSE BEFORE INVENTING):
+//    #### Tasks: NavigateToPage.at(url), SearchForItem.called(query) ...
+//    #### UI: CartUI.cartIcon(), SearchUI.searchField() ...
+//    #### Questions: TextOf.element(el), IsVisible.onScreen() ..."
+```
 
 #### `GherkinQualityScorer` — Motor de calidad (Phase 5)
 
@@ -514,10 +620,11 @@ Usuario (browser :3001)
 | **Strategy** | `AIProvider` | Intercambiar Ollama/OpenAI sin cambiar consumidores |
 | **Builder** | `ContextBuilder` | Construcción fluida de arrays de mensajes chat |
 | **Observer** | SSE + useSSEPipeline | Dashboard reacciona a eventos del pipeline |
-| **Chain of Responsibility** | AgentOrchestrator | Cada agente pasa resultado al siguiente |
+| **Blackboard** | `PipelineContext` | Estado compartido entre PipelineSteps |
+| **Plug-in / Pipeline** | `PipelineStep[]` | Pasos declarativos, orden en `defaultPipeline.ts` |
 | **Retry + Backoff** | ChromaVectorStore.withRetry() | Resiliencia ante ChromaDB inestable |
-| **Factory** | `createLogger(name)` | Logger pre-configurado por agente |
-| **Screenplay** | Serenity/JS | Abstracción de pruebas en capas Actor/Task/UI |
+| **Factory** | `createLogger(name)`, `buildDefaultPipeline()` | Logger y pipeline pre-configurados |
+| **Screenplay** | Serenity/JS library | Tasks/UI/Questions reutilizables en step definitions |
 | **Facade** | AgentOrchestrator | Oculta complejidad del pipeline a los servidores HTTP |
 
 ---
@@ -567,4 +674,5 @@ Usuario (browser :3001)
 | 11 | Vector Dedup | ChromaVectorStore, embeddings Ollama, DuplicatePreventionAgent |
 | 12 | Business Cache | BusinessAlignmentAgent, BusinessDocumentLoader, contexto de dominio |
 | 13 | Type Safety & Resilience | Logger abstraction, `any` eliminado, retry exponencial, `tsc --noEmit` |
-| 14 | **Next.js Dashboard** | **Dashboard React 19 con SSE en tiempo real, 7 agentes visibles** |
+| 14 | Next.js Dashboard | Dashboard React 19 con SSE en tiempo real, 7 agentes visibles |
+| 15 | **Screenplay Library & Plug-in Pipeline** | **Biblioteca Screenplay completa (5 UI, 7 Tasks, 5 Questions), PipelineStep plug-in architecture, AgentOrchestrator genérico, ProjectContextLoader con firmas reales** |

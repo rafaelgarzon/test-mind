@@ -29,78 +29,122 @@ y guías de extensión.
 ### Capas del framework de pruebas
 
 ```
-features/*.feature            ← Especificaciones BDD (Gherkin)
-  └── step_definitions/*.ts   ← Binding: Gherkin → Screenplay
-        └── tasks/*.ts         ← Tareas de negocio (Login, Search…)
-              └── ui/*.ts      ← Selectores de UI (Page Elements)
+features/*.feature                ← Especificaciones BDD (Gherkin)
+  └── step_definitions/*.ts       ← Binding: Gherkin → Screenplay
+        └── src/screenplay/
+              ├── tasks/*.ts       ← Tareas de negocio (Login, SearchForItem, AddProductToCart…)
+              ├── ui/*.ts          ← Selectores de UI (Page Elements)
+              └── questions/*.ts   ← Questions para assertions (TextOf, IsVisible…)
 ```
 
 #### 2.1 Feature (Gherkin)
 
 ```gherkin
-Feature: Login de usuarios
+Feature: Agregar Producto al Carro
 
-  Scenario: Login exitoso con credenciales válidas
-    Given que el actor "Admin" está en la página de login
-    When ingresa el usuario "admin@empresa.com" y contraseña "S3cret!"
-    Then es redirigido al panel de administración
+  Scenario: Agregar winter top al carrito desde feature items
+    Given que estoy en la URL "https://www.automationexercise.com/"
+    And la seccion "feature items" es visible en pantalla
+    When busca el "Winter Top" con precio "600RS" en la seccion "feature items"
+    And hace clic en el boton "Add to Cart"
+    And hace clic en el boton "View Cart"
+    Then deberia ver el producto agregado correctamente en el carro
+    And confirme que el "Winter Top" tiene el precio "600RS" en el carro
 ```
 
 #### 2.2 Step Definitions (Glue Code)
 
 ```typescript
-// features/step_definitions/login.steps.ts
+// features/step_definitions/agregar-producto.steps.ts
 import { Given, When, Then } from '@cucumber/cucumber';
-import { actorCalled, actorInTheSpotlight } from '@serenity-js/core';
-import { Login } from '../../src/screenplay/tasks/Login';
+import { actorCalled } from '@serenity-js/core';
+import { Ensure, includes } from '@serenity-js/assertions';
+import { NavigateToPage, AddProductToCart, OpenShoppingCart, ClickButton } from '../../src/screenplay/tasks';
+import { ProductListUI, CartUI } from '../../src/screenplay/ui';
+import { TextOf, IsVisible } from '../../src/screenplay/questions';
 
-Given('que el actor {string} está en la página de login', async (name: string) => {
-  await actorCalled(name).attemptsTo(
-    Navigate.to('https://app.example.com/login')
+Given('que estoy en la URL {string}', async (url: string) => {
+  await actorCalled('usuario').attemptsTo(NavigateToPage.at(url));
+});
+
+Given('la seccion {string} es visible en pantalla', async (section: string) => {
+  await actorCalled('usuario').attemptsTo(
+    Ensure.that(ProductListUI.section(section), IsVisible.onScreen()),
   );
 });
 
-When('ingresa el usuario {string} y contraseña {string}', async (user: string, pass: string) => {
-  await actorInTheSpotlight().attemptsTo(
-    Login.withCredentials(user, pass)
+When('busca el {string} con precio {string} en la seccion {string}',
+  async (product: string, _price: string, _section: string) => {
+    await actorCalled('usuario').attemptsTo(
+      AddProductToCart.named(product),
+    );
+  }
+);
+
+When('hace clic en el boton {string}', async (label: string) => {
+  await actorCalled('usuario').attemptsTo(ClickButton.withText(label));
+});
+
+Then('deberia ver el producto agregado correctamente en el carro', async () => {
+  await actorCalled('usuario').attemptsTo(
+    Ensure.that(CartUI.cartContainer(), IsVisible.onScreen()),
   );
 });
+
+Then('confirme que el {string} tiene el precio {string} en el carro',
+  async (product: string, price: string) => {
+    await actorCalled('usuario').attemptsTo(
+      Ensure.that(TextOf.element(CartUI.cartItemByName(product)), includes(price)),
+    );
+  }
+);
 ```
 
-#### 2.3 Tasks (Screenplay)
+#### 2.3 Biblioteca de Tasks
 
-```typescript
-// src/screenplay/tasks/Login.ts
-import { Task } from '@serenity-js/core';
-import { Enter, Click } from '@serenity-js/web';
-import { LoginUI } from '../ui/LoginUI';
+La biblioteca de Tasks disponible para los step definitions generados por IA:
 
-export const Login = {
-  withCredentials: (user: string, pass: string) =>
-    Task.where(`#actor logs in as ${user}`,
-      Enter.theValue(user).into(LoginUI.emailField()),
-      Enter.theValue(pass).into(LoginUI.passwordField()),
-      Click.on(LoginUI.submitButton())
-    )
-};
-```
+| Task | Factory Methods | Descripción |
+|------|----------------|-------------|
+| `Login` | `withCredentials(user, pass)` | Login con email + password |
+| `NavigateToPage` | `at(url)`, `reload()`, `back()` | Navegación a URL |
+| `SearchForItem` | `called(query)`, `byPressingEnter(query)` | Buscar en campo de búsqueda |
+| `AddProductToCart` | `named(productName)` | Encontrar producto + clic Add to Cart |
+| `OpenShoppingCart` | `fromHeader()`, `fromModal()` | Abrir carrito |
+| `FillField` | `byLabel(label, value)`, `byPlaceholder(ph, value)`, `byName(name, value)` | Llenar campo de texto |
+| `SelectDropdownOption` | `named(text).fromDropdownLabeled(label)` | Seleccionar opción de dropdown |
+| `ClickButton` | `labeled(name)`, `withText(text)`, `linkLabeled(text)` | Clic en botón o link |
 
-#### 2.4 UI Elements (Page Elements)
+**Import:** `import { NavigateToPage, SearchForItem } from '../../src/screenplay/tasks';`
 
-```typescript
-// src/screenplay/ui/LoginUI.ts
-import { By, PageElement } from '@serenity-js/web';
+#### 2.4 Biblioteca de UI Locators
 
-export const LoginUI = {
-  emailField:    () => PageElement.located(By.id('email')).describedAs('campo email'),
-  passwordField: () => PageElement.located(By.id('password')).describedAs('campo contraseña'),
-  submitButton:  () => PageElement.located(By.css('[type=submit]')).describedAs('botón login'),
-};
-```
+| Módulo | Locators Principales |
+|--------|---------------------|
+| `LoginUI` | `usernameField`, `passwordField`, `loginButton`, `flashMessage` |
+| `NavigationUI` | `header()`, `navLink(name)`, `menuItem(text)`, `pageHeading()` |
+| `SearchUI` | `searchField()`, `searchButton()`, `resultItems()`, `resultItemContaining(text)` |
+| `ProductListUI` | `section(name)`, `productByName(name)`, `addToCartButton()`, `allProducts()` |
+| `CartUI` | `cartIcon()`, `viewCartButton()`, `cartItems()`, `cartItemByName(name)`, `cartTotal()` |
+| `FormUI` | `fieldByLabel(label)`, `buttonByName(name)`, `buttonByText(text)`, `dropdownByLabel(label)` |
+
+**Import:** `import { CartUI, SearchUI } from '../../src/screenplay/ui';`
+
+#### 2.5 Biblioteca de Questions
+
+| Question | Métodos | Uso con Ensure |
+|----------|---------|----------------|
+| `TextOf` | `element(el)` | `Ensure.that(TextOf.element(el), equals('texto'))` |
+| `CountOf` | `elements(els)` | `Ensure.that(CountOf.elements(els), equals(3))` |
+| `IsVisible` | `onScreen()`, `inDom()`, `andClickable()` | `Ensure.that(el, IsVisible.onScreen())` |
+| `CurrentUrl` | `href()`, `get()` | `Ensure.that(CurrentUrl.href(), includes('/cart'))` |
+| `ElementExists` | `in(el)` | `Ensure.that(ElementExists.in(el), equals(true))` |
+
+**Import:** `import { TextOf, IsVisible } from '../../src/screenplay/questions';`
 
 ---
 
-## 3. Pipeline Multi-Agente
+## 3. Pipeline Multi-Agente (Plug-in Architecture)
 
 ### 3.1 Interfaz base de agentes
 
@@ -112,58 +156,119 @@ interface Agent<Req, Res> {
 }
 ```
 
-### 3.2 Crear un nuevo agente
+### 3.2 Interfaz PipelineStep
+
+Cada agente está envuelto en un `PipelineStep`. El orquestador solo conoce
+esta interfaz — nunca importa agentes concretos (OCP + DIP).
+
+```typescript
+// src/ai/core/PipelineStep.ts
+interface PipelineStep {
+  readonly name: string;
+  execute(context: PipelineContext, progress: ProgressReporter): Promise<StepOutcome>;
+}
+
+// StepOutcome helpers:
+Continue                         // paso completado, continuar
+ShortCircuit('cache hit')        // detener pipeline con éxito
+Abort('razón', error?)           // detener pipeline con fallo
+```
+
+### 3.3 Crear un nuevo paso del pipeline
+
+**Paso 1 — Crear el agente (si no existe):**
 
 ```typescript
 // src/ai/agents/MyCustomAgent.ts
-import { Agent } from './Agent';
-import { AIProvider } from '../infrastructure/AIProvider';
-import { ContextBuilder } from '../infrastructure/ContextBuilder';
-import { createLogger } from '../infrastructure/Logger';
-
-interface MyRequest { requirement: string; }
-interface MyResponse { result: string; }
-
 export class MyCustomAgent implements Agent<MyRequest, MyResponse> {
   readonly name = 'MyCustomAgent';
   private readonly logger = createLogger('MyCustomAgent');
-
   constructor(private readonly ai: AIProvider) {}
 
   async run(request: MyRequest): Promise<MyResponse> {
-    this.logger.info('Procesando requerimiento', { req: request.requirement });
-
     const messages = new ContextBuilder()
-      .withSystemPrompt('Eres un agente especializado en...')
-      .withDomainKnowledge('Contexto del dominio...')
-      .withUserMessage(request.requirement)
+      .addSystemPrompt('Eres un agente especializado en...')
+      .addDomainKnowledge('Contexto del dominio...')
+      .addUserMessage(request.requirement)
       .build();
-
     const result = await this.ai.generateChat(messages);
-    this.logger.info('Resultado generado', { length: result.length });
-    return { result };
+    return { success: true, result };
   }
 }
 ```
 
-### 3.3 Registrar el agente en el Orquestador
+**Paso 2 — Crear el PipelineStep:**
 
 ```typescript
-// src/ai/core/AgentOrchestrator.ts
-// Añadir instancia en el constructor y llamarlo en el método run()
+// src/ai/pipeline/steps/MyCustomStep.ts
+import { PipelineStep, PipelineContext, ProgressReporter, StepOutcome, Continue, Abort } from '../../core/PipelineStep';
+import { MyCustomAgent } from '../../agents/MyCustomAgent';
+
+export class MyCustomStep implements PipelineStep {
+  readonly name = 'MyCustomAgent';
+  constructor(private readonly agent: MyCustomAgent) {}
+
+  async execute(ctx: PipelineContext, progress: ProgressReporter): Promise<StepOutcome> {
+    progress.update('Procesando...');
+    const result = await this.agent.run({ requirement: ctx.userRequirement });
+    if (!result.success) return Abort(result.error ?? 'Fallo');
+    ctx.extras['myResult'] = result.result;    // guardar en blackboard
+    progress.finish('✅ Completado.');
+    return Continue;
+  }
+}
 ```
+
+**Paso 3 — Registrar en `defaultPipeline.ts`:**
+
+```typescript
+// src/ai/pipeline/defaultPipeline.ts
+export function buildDefaultPipeline(agents: DefaultPipelineAgents): PipelineStep[] {
+  return [
+    new DuplicatePreventionStep(agents.duplicatePreventionAgent),
+    new RequirementsStep(agents.requirementsAgent, agents.businessAlignmentAgent),
+    new MyCustomStep(agents.myCustomAgent),           // ← nuevo paso aquí
+    new CodeGeneratorStep(agents.codeGeneratorAgent),
+    // ... resto de pasos
+  ];
+}
+```
+
+**No se edita AgentOrchestrator.** Solo `defaultPipeline.ts` define el orden.
 
 ### 3.4 ContextBuilder — API completa
 
 ```typescript
 const messages = new ContextBuilder()
-  .withSystemPrompt('Instrucciones del sistema...')
-  .withDomainKnowledge('Conocimiento del dominio...')
-  .withUserMessage('Mensaje del usuario')
-  .withAssistantMessage('Respuesta anterior (para historial)')
-  .withUserMessage('Siguiente turno del usuario')
+  .addSystemPrompt('Instrucciones del sistema...')
+  .addDomainKnowledge('Conocimiento del dominio...')
+  .addMemoryFile('Contexto similar recuperado de RAG...')
+  .addUserMessage('Mensaje del usuario')
+  .addAssistantMessage('Respuesta anterior (para historial)')
+  .addUserMessage('Siguiente turno del usuario')
   .build();
-// → ChatMessage[]  ({ role: 'system'|'user'|'assistant', content: string })
+// → Message[]  ({ role: 'system'|'user'|'assistant', content: string, type?: string })
+```
+
+### 3.5 ProjectContextLoader — RAG del Screenplay
+
+El `CodeGeneratorAgent` usa `ProjectContextLoader` para inyectar al LLM las
+firmas y ejemplos de la biblioteca Screenplay existente. Esto evita que el
+modelo invente APIs inexistentes.
+
+```typescript
+const loader = new ProjectContextLoader();
+const context = loader.loadContext();
+// Escanea src/screenplay/{tasks,ui,questions} y genera:
+// #### Tasks (high-level business actions — PREFER these over raw interactions)
+// - NavigateToPage (from NavigateToPage.ts):
+//   - NavigateToPage.at(url: string)
+//   - NavigateToPage.reload()
+//   Example: actorCalled('user').attemptsTo(NavigateToPage.at('https://example.com'))
+// #### UI Locators (PageElement factories)
+// - SearchUI: searchField(), searchButton(), resultItems() ...
+// #### Import paths
+// - Tasks: import { NavigateToPage } from '../../src/screenplay/tasks';
 ```
 
 ---
@@ -355,9 +460,12 @@ export const AGENT_ORDER = [
 1. Crea `src/ai/agents/MiAgente.ts` implementando `Agent<Req, Res>`
 2. Usa `ContextBuilder` + `generateChat()` (no `generate()`)
 3. Añade `createLogger('MiAgente')` para logging estructurado
-4. Registra el agente en `AgentOrchestrator.ts`
-5. Añade el nombre a `AGENT_ORDER` en `frontend/src/lib/types.ts`
-6. El `AgentTimeline` del dashboard lo mostrará automáticamente
+4. Crea `src/ai/pipeline/steps/MiAgenteStep.ts` implementando `PipelineStep`
+5. Registra el paso en `src/ai/pipeline/defaultPipeline.ts` (ver sección 3.3)
+6. Añade el nombre a `AGENT_ORDER` en `frontend/src/lib/types.ts`
+7. El `AgentTimeline` del dashboard lo mostrará automáticamente
+
+**Importante:** NO se edita `AgentOrchestrator.ts` — solo `defaultPipeline.ts`.
 
 ### 7.3 Cambiar el proveedor de IA
 
