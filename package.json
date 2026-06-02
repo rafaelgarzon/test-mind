@@ -4,23 +4,24 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test:run": "npx cucumber-js --require-module ts-node/register --format @serenity-js/cucumber --require features/support/setup.ts --require features/step_definitions/**/*.ts features/**/*.feature",
+    "test:run": "npx cucumber-js --require-module ts-node/register --require-module tsconfig-paths/register --format @serenity-js/cucumber --require features/support/setup.ts --require features/step_definitions/**/*.ts features/**/*.feature",
     "report": "serenity-bdd run",
     "test": "npm run test:run && npm run report",
     "test:ui": "npx playwright test --ui",
     "test:debug": "npx playwright test --debug",
     "playwright:report": "npx playwright show-report",
-    "ai:gen": "npx ts-node src/ai/generator.ts",
-    "ai:cli": "npx ts-node src/cli/index.ts",
-    "ai:web": "npx ts-node src/ui/server.ts",
-    "ai:api": "npx ts-node src/api/server.ts",
+    "ai:gen": "npx ts-node -r tsconfig-paths/register src/ai/generator.ts",
+    "ai:cli": "npx ts-node -r tsconfig-paths/register src/cli/index.ts",
+    "ai:web": "npx ts-node -r tsconfig-paths/register src/ui/server.ts",
+    "ai:api": "npx ts-node -r tsconfig-paths/register src/api/server.ts",
     "frontend:dev": "cd frontend && npm run dev",
     "frontend:build": "cd frontend && npm run build",
     "dev:all": "npx concurrently \"npm run ai:web\" \"npm run ai:api\" \"npm run frontend:dev\"",
     "clean": "rm -rf test-results playwright-report target",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
-    "test:unit:coverage": "vitest run --coverage"
+    "test:unit:coverage": "vitest run --coverage",
+    "prepare": "husky"
   },
   "keywords": [],
   "author": "",
@@ -56,7 +57,9 @@
     "@types/node": "^25.1.0",
     "@types/sqlite3": "^3.1.11",
     "@vitest/coverage-v8": "^4.0.18",
+    "husky": "^9.1.7",
     "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "vitest": "^4.0.18"
   }
 }

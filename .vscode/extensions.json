@@ -1,0 +1,25 @@
+{
+  // Recommended extensions for Automation Front AI contributors.
+  // VS Code prompts to install these when opening the workspace.
+  "recommendations": [
+    // TypeScript / code quality
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+
+    // BDD / Gherkin
+    "cucumberopen.cucumber-official",
+
+    // Playwright
+    "ms-playwright.playwright",
+
+    // AI assistants (any one is fine; all read AGENTS.md / .cursorrules / etc.)
+    "github.copilot",
+    "github.copilot-chat",
+    "anthropic.claude-code",
+
+    // Productivity
+    "eamodio.gitlens",
+    "streetsidesoftware.code-spell-checker"
+  ],
+  "unwantedRecommendations": []
+}

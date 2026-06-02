@@ -1,0 +1,3 @@
+# Automation Front AI — pre-commit guardrail
+# Fail fast if TypeScript doesn't type-check
+npx tsc --noEmit

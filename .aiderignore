@@ -1,0 +1,11 @@
+# Files that Aider should not edit or send to the LLM
+node_modules/
+dist/
+target/
+frontend/node_modules/
+frontend/.next/
+.claude/
+*.sqlite
+*.sqlite3
+package-lock.json
+frontend/package-lock.json
