@@ -1,0 +1,37 @@
+# Automation Front AI — Cursor Rules
+# Full context: read AGENTS.md at project root
+
+## Project identity
+Test automation framework with multi-agent AI pipeline. TypeScript strict, Serenity/JS Screenplay pattern.
+
+## Key rules
+- TypeScript strict mode — `any` is forbidden, use `unknown`
+- Use path aliases: `@screenplay/*`, `@core/*`, `@pipeline/*`, `@agents/*`, `@infra/*`
+- Screenplay pattern: REUSE existing Tasks from `src/screenplay/tasks/` before creating new ones
+- Pipeline architecture: add steps in `src/ai/pipeline/defaultPipeline.ts`, NOT in AgentOrchestrator
+- AI calls: use `generateChat()` + `ContextBuilder`, never deprecated `generate()`
+- Logging: `createLogger('Name')` from `src/ai/infrastructure/Logger.ts`
+- Error handling: `catch (error: unknown)`, never `catch (error: any)`
+
+## Available Screenplay APIs
+### Tasks (import from `@screenplay/tasks`)
+NavigateToPage.at(url) | SearchForItem.called(query) | AddProductToCart.named(name)
+OpenShoppingCart.fromModal() | FillField.byLabel(label, value) | ClickButton.labeled(name)
+SelectDropdownOption.named(text).fromDropdownLabeled(label) | Login.withCredentials(user, pass)
+
+### UI Locators (import from `@screenplay/ui`)
+NavigationUI | SearchUI | ProductListUI | CartUI | FormUI | LoginUI
+
+### Questions (import from `@screenplay/questions`)
+TextOf.element(el) | CountOf.elements(els) | IsVisible.onScreen()
+CurrentUrl.href() | ElementExists.in(el)
+
+## Verification
+Run `npx tsc --noEmit` after any TypeScript edit.
+Run `npm run test:unit` after modifying agents or pipeline steps.
+
+## Anti-patterns
+- Do NOT fabricate UI elements not mentioned in requirements
+- Do NOT use Navigate.to() directly — use NavigateToPage.at()
+- Do NOT use console.log — use createLogger()
+- Do NOT assert URLs unless the requirement mentions a redirect

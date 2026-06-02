@@ -1,0 +1,8 @@
+# Aider configuration — Automation Front AI
+# Full context: read AGENTS.md at project root
+
+lint-cmd: npx tsc --noEmit
+auto-commits: false
+read:
+  - AGENTS.md
+  - docs/ARQUITECTURA.md
