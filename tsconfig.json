@@ -14,7 +14,15 @@
         "moduleResolution": "node",
         "outDir": "./dist",
         "rootDir": "./src",
-        "resolveJsonModule": true
+        "resolveJsonModule": true,
+        "baseUrl": "./src",
+        "paths": {
+            "@screenplay/*": ["screenplay/*"],
+            "@agents/*": ["ai/agents/*"],
+            "@pipeline/*": ["ai/pipeline/*"],
+            "@core/*": ["ai/core/*"],
+            "@infra/*": ["ai/infrastructure/*"]
+        }
     },
     "include": [
         "src/**/*.ts"

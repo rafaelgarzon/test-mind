@@ -6,7 +6,11 @@ playwright-report
 dist
 coverage
 .idea
-.vscode
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
 target
 *.sqlite
 *.db
